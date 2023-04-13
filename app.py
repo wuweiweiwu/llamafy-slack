@@ -1,4 +1,6 @@
 import os
+import re
+
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -15,10 +17,7 @@ app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 @app.event("app_mention")
 def handle_mentions(event, client, say):
     thread_ts = event.get("thread_ts", None) or event["ts"]
-
-    elements = event["blocks"][0]["elements"][0]["elements"]
-    texts = [el["text"] for el in elements if el["type"] == "text"]
-    question = "".join(texts)
+    prompt = re.sub("\\s<@[^, ]*|^<@[^, ]*", "", event["text"])
 
     # say() sends a message to the channel where the event was triggered
     say(
@@ -34,7 +33,7 @@ def handle_mentions(event, client, say):
         #         },
         #     }
         # ],
-        text=question,
+        text=prompt,
         thread_ts=thread_ts,
     )
 
