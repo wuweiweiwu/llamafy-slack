@@ -16,6 +16,10 @@ app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 def handle_mentions(event, client, say):
     thread_ts = event.get("thread_ts", None) or event["ts"]
 
+    elements = event["blocks"][0]["elements"][0]["elements"]
+    texts = [el["text"] for el in elements if el["type"] == "text"]
+    question = "".join(texts)
+
     # say() sends a message to the channel where the event was triggered
     say(
         # blocks=[
@@ -30,9 +34,14 @@ def handle_mentions(event, client, say):
         #         },
         #     }
         # ],
-        text=f"Hey there <@{event['user']}>!",
+        text=question,
         thread_ts=thread_ts,
     )
+
+
+@app.event("message")
+def handle_message_events(body, logger):
+    logger.info(body)
 
 
 # @app.action("button_click")
