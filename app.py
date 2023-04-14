@@ -22,6 +22,7 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
 import openai
+from tomark import Tomark
 
 # Load default environment variables (.env)
 load_dotenv()
@@ -37,6 +38,50 @@ openai.api_key = OPENAI_API_KEY
 ENGINE = create_engine("sqlite:///./chinook.db")
 
 DIALECT = "sqlite"
+
+
+sql_generation_few_shots = [
+    {
+        "user": "Which neighborhood had the most crime in 2021?",
+        "assistant": "SELECT neighborhood, COUNT(*) as num_crimes \\nFROM sf_crime_incidents\\nWHERE occurred >= '2021-01-01' AND occurred < '2022-01-01'\\nGROUP BY neighborhood\\nORDER BY num_crimes DESC NULLS LAST\\nLIMIT 1;",
+    },
+    {
+        "user": "What are the largest 3 neighborhoods?",
+        "assistant": "SELECT stp1.neighborhood, sum(tract_population) as total_population\\nFROM sf_total_pop_by_census_tract stp1\\nGROUP BY stp1.neighborhood\\nORDER BY total_population DESC NULLS LAST\\nLIMIT 3;",
+    },
+    {
+        "user": "where are the places with the most poop per capita?",
+        "assistant": "WITH total_population AS (\\nSELECT neighborhood, tract_population\\nFROM sf_total_pop_by_census_tract\\n),\\nincident_counts AS (\\nSELECT\\nsfi.neighborhood,\\nCOUNT(*) as poop_count\\nFROM\\nsf_311_incidents sfi\\nWHERE\\nsfi.incident_type = 'Feces/Urine'\\nGROUP BY\\nsfi.neighborhood\\n),\\nneighborhood_stats AS (\\nSELECT\\nic.neighborhood,\\nSUM(tp.tract_population) as total_population,\\nic.poop_count\\nFROM\\nincident_counts ic\\nJOIN total_population tp ON ic.neighborhood = tp.neighborhood\\nGROUP BY\\nic.neighborhood, ic.poop_count\\n)\\nSELECT\\nneighborhood,\\ntotal_population,\\npoop_count,\\npoop_count / NULLIF(total_population, 0) as poop_per_capita\\nFROM\\nneighborhood_stats\\nORDER BY\\npoop_per_capita DESC NULLS LAST;",
+    },
+    {
+        "user": "Where is the most violent crime by percentage of crime",
+        "assistant": "SELECT neighborhood, \\n       100.0 * COUNT(CASE WHEN incident_type IN ('Aggravated Assault', 'Arson', 'Assault', 'Manslaughter', 'Robbery', 'Sexual Offense', 'Homicide') THEN 1 END) / COUNT(*) as violent_crime_percentage\\nFROM sf_crime_incidents\\nWHERE neighborhood IS NOT NULL\\nGROUP BY neighborhood\\nORDER BY violent_crime_percentage DESC NULLS LAST;",
+    },
+    {
+        "user": "What are the top 5 neighborhoods with the most encampments per capita?",
+        "assistant": "WITH total_population AS (\\nSELECT neighborhood, SUM(tract_population) AS total_population\\nFROM sf_total_pop_by_census_tract\\nGROUP BY neighborhood\\n),\\nencampments AS (\\nSELECT\\nsfi.neighborhood,\\ntp.total_population AS total_pop,\\nCOUNT(*) AS num_encampments\\nFROM\\nsf_311_incidents sfi\\nJOIN total_population tp ON sfi.neighborhood = tp.neighborhood\\nWHERE\\nsfi.incident_type = 'Homeless Encampments'\\nGROUP BY\\nsfi.neighborhood, tp.total_population\\n)\\nSELECT\\nneighborhood,\\ntotal_pop,\\nnum_encampments,\\nnum_encampments / NULLIF(total_pop, 0) AS encampments_per_capita\\nFROM\\nencampments\\nWHERE\\ntotal_pop > 0\\nORDER BY\\nencampments_per_capita DESC NULLS LAST\\nLIMIT 5;",
+    },
+    {
+        "user": "Give me the number of poop incidents per capita in the Mission neighborhood",
+        "assistant": "WITH stp AS (\\n    SELECT neighborhood, SUM(tract_population) AS total_population\\n    FROM sf_total_pop_by_census_tract\\n    GROUP BY neighborhood\\n), incidents_per_neighborhood AS (\\n    SELECT sfi.neighborhood, COUNT(*) AS num_incidents\\n    FROM sf_311_incidents sfi\\n    WHERE sfi.neighborhood = 'Mission' AND sfi.incident_type = 'Feces/Urine'\\n    GROUP BY sfi.neighborhood\\n)\\nSELECT\\n    incidents_per_neighborhood.neighborhood,\\n    incidents_per_neighborhood.num_incidents,\\n    incidents_per_neighborhood.num_incidents / NULLIF(SUM(stp.total_population), 0) AS incidents_per_capita\\nFROM stp\\nJOIN incidents_per_neighborhood ON stp.neighborhood = incidents_per_neighborhood.neighborhood\\nGROUP BY incidents_per_neighborhood.neighborhood, incidents_per_neighborhood.num_incidents;\\n",
+    },
+    {
+        "user": "3 neighborhoods with the highest female to male ratio",
+        "assistant": "WITH total_population AS (\\n    SELECT neighborhood, SUM(male_population + female_population) AS total_pop\\n    FROM sf_sex_by_census_tract\\n    GROUP BY neighborhood\\n), female_to_male_ratio AS (\\n    SELECT \\n        sfs.neighborhood, \\n        SUM(sfs.female_population) / NULLIF(SUM(sfs.male_population), 0) AS ratio\\n    FROM sf_sex_by_census_tract sfs\\n    JOIN total_population tp ON sfs.neighborhood = tp.neighborhood\\n    GROUP BY sfs.neighborhood\\n)\\nSELECT \\n    neighborhood, \\n    ratio\\nFROM female_to_male_ratio\\nORDER BY ratio DESC NULLS LAST\\nLIMIT 3;",
+    },
+    {
+        "user": "which 5 neighborhoods had the most drug violations involving heroin?",
+        "assistant": "WITH heroin_violations AS (\\n    SELECT neighborhood, COUNT(*) AS num_heroin_violations\\n    FROM sf_crime_incidents\\n    WHERE incident_type = 'Drug Violation' AND description ILIKE '%heroin%'\\n    GROUP BY neighborhood\\n)\\nSELECT neighborhood, num_heroin_violations\\nFROM heroin_violations\\nORDER BY num_heroin_violations DESC NULLS LAST\\nLIMIT 5;",
+    },
+    {
+        "user": "How many crimes were related to guns?",
+        "assistant": "SELECT COUNT(*) as num_gun_crimes\\nFROM sf_crime_incidents\\nWHERE description ~* '\\\\m(gun|firearm)\\\\M';",
+    },
+    {
+        "user": "How many crimes had ties to knives?",
+        "assistant": "SELECT COUNT(*) as num_gun_crimes\\nFROM sf_crime_incidents\\nWHERE description ~* '\\\\m(knife|stabbing)\\\\M';",
+    },
+]
 
 
 class NotReadOnlyException(Exception):
@@ -330,7 +375,7 @@ def get_retry_prompt(natural_language_query: str, table_info: str) -> str:
     return f"""You are an expert and empathetic database engineer that is generating correct read-only {DIALECT} query to answer the following question/command: {natural_language_query}
 
 We already created the tables in the database with the following CREATE TABLE code:
----------------------
+--------------------- 
 {table_info}
 ---------------------
  
@@ -392,6 +437,12 @@ def text_to_sql_with_retry(
 
     # messages = make_default_messages(schemas, scope)
     messages = []
+
+    # add few shots
+    for example in sql_generation_few_shots:
+        messages.append({"role": "user", "content": example["user"]})
+        messages.append({"role": "assistant", "content": example["assistant"]})
+
     messages.append({"role": "user", "content": content})
 
     assistant_message = None
@@ -485,6 +536,7 @@ if __name__ == "__main__":
 
     result, sql_query = text_to_sql_with_retry(question, tables)
 
-    print(result)
+    markdown = Tomark.table(result["results"])
+    print(markdown)
 
     # SocketModeHandler(app, SLACK_APP_TOKEN).start()
