@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import json
 
 
 from slack_bolt import App
@@ -11,8 +12,11 @@ import openai
 # Load default environment variables (.env)
 load_dotenv()
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
+SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
 
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY
 
 
 def openai_call(
@@ -45,7 +49,7 @@ def openai_call(
 
 
 # Initializes your app with your bot token and socket mode handler
-app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
+app = App(token=SLACK_BOT_TOKEN)
 
 
 # Listens to incoming messages that contain "hello"
@@ -78,13 +82,6 @@ def handle_message_events(body, logger):
     logger.info(body)
 
 
-# @app.action("button_click")
-# def action_button_click(body, ack, say):
-#     # Acknowledge the action
-#     ack()
-#     say(f"<@{body['user']['id']}> clicked the button", thread_ts=body["value"])
-
-
 # Start your app
 if __name__ == "__main__":
-    SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
+    SocketModeHandler(app, SLACK_APP_TOKEN).start()
