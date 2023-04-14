@@ -31,6 +31,10 @@ SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
 
 openai.api_key = OPENAI_API_KEY
 
+# global engine
+# needs to be dynamic in the future
+ENGINE = create_engine("sqlite:///./chinook.db")
+
 
 def get_assistant_message(
     messages: List[Dict],
@@ -74,7 +78,7 @@ def get_table_indexes(inspector: Inspector, table: Table) -> str:
     return f"Table Indexes:\n{indexes_formatted}"
 
 
-def get_sample_rows(engine: Engine, table: Table) -> str:
+def get_sample_rows(table: Table) -> str:
     sample_rows_in_table_info = 3
 
     # build the select command
@@ -85,7 +89,7 @@ def get_sample_rows(engine: Engine, table: Table) -> str:
 
     try:
         # get the sample rows
-        with engine.connect() as connection:
+        with ENGINE.connect() as connection:
             sample_rows = connection.execute(command)
             # shorten values in the sample rows
             sample_rows = list(map(lambda ls: [str(i)[:100] for i in ls], sample_rows))
@@ -110,10 +114,9 @@ def get_table_info() -> str:
     Get table info from the database
     https://github.com/hwchase17/langchain/blob/634358db5e9d0f091c66c82b8ed1379ec6531f88/langchain/sql_database.py#L128
     """
-    engine = create_engine("sqlite:///./chinook.db")
-    inspector = inspect(engine)
+    inspector = inspect(ENGINE)
     metadata = MetaData()
-    metadata.reflect(bind=engine)
+    metadata.reflect(bind=ENGINE)
 
     table_names = inspector.get_table_names()
     dialect = "sqlite"
@@ -128,13 +131,13 @@ def get_table_info() -> str:
     tables = []
     for table in meta_tables:
         # add create table command
-        create_table = str(CreateTable(table).compile(engine))
+        create_table = str(CreateTable(table).compile(ENGINE))
         table_info = f"{create_table.rstrip()}"
 
         # extra info
         table_info += "\n\n/*"
         # table_info += f"\n{get_table_indexes(inspector,table)}\n"
-        table_info += f"\n{get_sample_rows(engine,table)}\n"
+        table_info += f"\n{get_sample_rows(table)}\n"
         table_info += "*/"
 
         tables.append(table_info)
