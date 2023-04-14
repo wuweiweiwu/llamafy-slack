@@ -149,6 +149,10 @@ def get_table_info() -> str:
 
 
 def get_table_selection_messages():
+    """
+    system messages and few shot examples
+
+    """
     # default_messages = [
     #     {
     #         "role": "system",
@@ -170,8 +174,10 @@ def get_table_selection_messages():
     return []
 
 
-def get_table_selection_user_message_with_descriptions():
-    message = """
+def get_table_selection_user_message_with_descriptions(
+    natural_language_query: str,
+) -> str:
+    message = f"""
         You are an expert data scientist.
         Return a JSON object with relevant SQL tables for answering the following natural language query:
         ---------------
@@ -210,10 +216,9 @@ def get_relevant_tables(natural_language_query: str) -> List[str]:
     Identify relevant tables for answering a natural language query via LM
     """
 
-    # including system messages and few shot examples
     messages = get_table_selection_messages().copy()
 
-    user_content = get_table_selection_user_message_with_descriptions().format(
+    user_content = get_table_selection_user_message_with_descriptions(
         natural_language_query=natural_language_query,
     )
     messages.append({"role": "user", "content": user_content})
