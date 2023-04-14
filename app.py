@@ -39,6 +39,10 @@ ENGINE = create_engine("sqlite:///./chinook.db")
 DIALECT = "sqlite"
 
 
+class NotReadOnlyException(Exception):
+    pass
+
+
 def get_open_ai_completion(
     messages: List[Dict],
     model: str = "gpt-3.5-turbo",
@@ -169,7 +173,11 @@ def get_table_info(table_names: List[str] = None) -> str:
 
 
 def execute_sql(sql_query: str) -> Dict:
+    if not is_read_only_query(sql_query):
+        raise NotReadOnlyException("Only read-only queries are allowed.")
+
     with ENGINE.connect() as connection:
+        connection = connection.execution_options(postgresql_readonly=True)
         with connection.begin():
             sql_text = text(sql_query)
             result = connection.execute(sql_text)
@@ -188,6 +196,34 @@ def execute_sql(sql_query: str) -> Dict:
             "column_names": column_names,
             "results": results,
         }
+
+
+def is_read_only_query(sql_query: str):
+    """
+    Checks if the given SQL query string is read-only.
+    Returns True if the query is read-only, False otherwise.
+    """
+    # List of SQL statements that modify data in the database
+    modifying_statements = [
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "CREATE",
+        "ALTER",
+        "GRANT",
+        "TRUNCATE",
+        "LOCK TABLES",
+        "UNLOCK TABLES",
+    ]
+
+    # Check if the query contains any modifying statements
+    for statement in modifying_statements:
+        if not sql_query or statement in sql_query.upper():
+            return False
+
+    # If no modifying statements are found, the query is read-only
+    return True
 
 
 # def get_table_selection_messages():
