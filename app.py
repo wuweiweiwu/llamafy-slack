@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+from typing import Dict, List
 
 from sqlalchemy import (
     MetaData,
@@ -31,11 +32,40 @@ SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
 openai.api_key = OPENAI_API_KEY
 
 
+def get_assistant_message(
+    messages,
+    model: str = "gpt-3.5-turbo",
+    temperature: float = 0,
+):
+    while True:
+        try:
+            # Use chat completion API
+            response = openai.ChatCompletion.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+            )
+
+            return response.choices[0]
+        except openai.error.RateLimitError:
+            print(
+                "The OpenAI API rate limit has been exceeded. Waiting 10 seconds and trying again."
+            )
+            time.sleep(10)  # Wait 10 seconds and try again
+
+
 def format_index(index: dict) -> str:
     return (
         f'Name: {index["name"]}, Unique: {index["unique"]},'
         f' Columns: {str(index["column_names"])}'
     )
+
+
+def extract_text_from_markdown(text):
+    matches = re.findall(r"```([\s\S]+?)```", text)
+    if matches:
+        return matches[0]
+    return text
 
 
 def get_table_indexes(inspector: Inspector, table: Table) -> str:
@@ -103,41 +133,94 @@ def get_table_info():
 
         # extra info
         table_info += "\n\n/*"
-        table_info += f"\n{get_table_indexes(inspector,table)}\n"
+        # table_info += f"\n{get_table_indexes(inspector,table)}\n"
         table_info += f"\n{get_sample_rows(engine,table)}\n"
         table_info += "*/"
 
         tables.append(table_info)
 
-    final_str = "\n\n".join(tables)
-    return final_str
+    # final_str = "\n\n".join(tables)
+    # return final_str
+
+    return "\n\n".join(table_names)
 
 
-def openai_call(
-    prompt: str,
-    model: str = "gpt-3.5-turbo",
-    temperature: float = 0.5,
-    max_tokens: int = 100,
-):
-    while True:
-        try:
-            # Use chat completion API
-            messages = [{"role": "system", "content": prompt}]
-            response = openai.ChatCompletion.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                stop=None,
-            )
+def get_table_selection_messages():
+    # default_messages = [
+    #     {
+    #         "role": "system",
+    #         "content": (
+    #             "You are a helpful assistant for identifying relevant SQL tables to use for answering a natural language query."
+    #             ' You respond in JSON format with your answer in a field named "tables" which is a list of strings.'
+    #             " Respond with an empty list if you cannot identify any relevant tables."
+    #             # " Write your answer in markdown format."
+    #             "\n"
+    #             "The following are descriptions of available tables and enums:\n"
+    #             "---------------------\n" + get_table_info() + "---------------------\n"
+    #         ),
+    #     }
+    # ]
 
-            return response.choices[0].message.content.strip()
-        except openai.error.RateLimitError:
-            print(
-                "The OpenAI API rate limit has been exceeded. Waiting 10 seconds and trying again."
-            )
-            time.sleep(10)  # Wait 10 seconds and try again
+    # default_messages.extend([
+
+    # ])
+    return []
+
+
+def get_table_selection_message_with_descriptions():
+    message = """
+        You are an expert data scientist.
+        Return a JSON object with relevant SQL tables for answering the following natural language query:
+        ---------------
+        {natural_language_query}
+        ---------------
+        Respond in JSON format with your answer in a field named \"tables\" which is a list of strings.
+        Respond with an empty list if you cannot identify any relevant tables.
+        Write your answer in markdown format.
+        """
+
+    return (
+        message
+        + f"""
+        The following are the scripts that created the tables as well as sample rows that that table:
+        ---------------------
+        {get_table_info()}
+        --------------------- 
+
+        in your answer, provide the following information:
+        
+        - <one to two sentence comment explaining what tables can be relevant goes here>
+        - <for each table identified, comment double checking the table is in the schema above along with what the first column in the table is or (none) if it doesn't exist. be careful that any tables suggested were actually above>
+        - <if any tables were incorrectly identified, make a note here about what tables from the schema should actually be used if any>
+        - the markdown formatted like this:
+        ```
+        <json of the tables>
+        ```
+
+        Thanks!
+        """
+    )
+
+
+def get_relevant_tables(natural_language_query):
+    """
+    Identify relevant tables for answering a natural language query via LM
+    """
+    content = get_table_selection_message_with_descriptions().format(
+        natural_language_query=natural_language_query,
+    )
+
+    messages = get_table_selection_messages().copy()
+    messages.append({"role": "user", "content": content})
+
+    assistant_message = get_assistant_message(
+        messages=messages,
+        model="gpt-3.5-turbo",
+    )["message"]["content"]
+
+    tables_json_str = extract_text_from_markdown(assistant_message)
+    tables = json.loads(tables_json_str).get("tables")
+    return tables
 
 
 # Initializes your app with your bot token and socket mode handler
@@ -176,5 +259,6 @@ def handle_message_events(body, logger):
 
 # Start your app
 if __name__ == "__main__":
-    print(get_table_info())
+    print(get_relevant_tables("what are the top 10 albums"))
+    # print(get_table_info())
     # SocketModeHandler(app, SLACK_APP_TOKEN).start()
