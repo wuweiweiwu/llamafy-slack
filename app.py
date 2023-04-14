@@ -38,16 +38,8 @@ ENGINE = create_engine("sqlite:///./chinook.db")
 
 DIALECT = "sqlite"
 
-MSG_WITH_ERROR_TRY_AGAIN = (
-    "Try again. "
-    f"Only respond with valid {DIALECT}. Write your answer in JSON. "
-    f"The {DIALECT} query you just generated resulted in the following error message:\n"
-    "{error_message}"
-    "Check the table schema and ensure that the columns for the table exist and will provide the expected results."
-)
 
-
-def get_assistant_message(
+def get_open_ai_completion(
     messages: List[Dict],
     model: str = "gpt-3.5-turbo",
     temperature: float = 0,
@@ -69,11 +61,11 @@ def get_assistant_message(
             time.sleep(10)  # Wait 10 seconds and try again
 
 
-def format_index(index: dict) -> str:
-    return (
-        f'Name: {index["name"]}, Unique: {index["unique"]},'
-        f' Columns: {str(index["column_names"])}'
-    )
+# def format_index(index: dict) -> str:
+#     return (
+#         f'Name: {index["name"]}, Unique: {index["unique"]},'
+#         f' Columns: {str(index["column_names"])}'
+#     )
 
 
 def extract_text_from_markdown(text: str) -> str:
@@ -98,42 +90,42 @@ def extract_sql_query_from_message(text: str) -> Dict:
     return {"SQL": sql}
 
 
-def get_table_indexes(table: Table) -> str:
-    inspector = inspect(ENGINE)
-    indexes = inspector.get_indexes(table.name)
-    indexes_formatted = "\n".join(map(format_index, indexes))
-    return f"Table Indexes:\n{indexes_formatted}"
+# def get_table_indexes(table: Table) -> str:
+#     inspector = inspect(ENGINE)
+#     indexes = inspector.get_indexes(table.name)
+#     indexes_formatted = "\n".join(map(format_index, indexes))
+#     return f"Table Indexes:\n{indexes_formatted}"
 
 
-def get_sample_rows(table: Table) -> str:
-    sample_rows_in_table_info = 3
+# def get_sample_rows(table: Table) -> str:
+#     sample_rows_in_table_info = 3
 
-    # build the select command
-    command = select(table).limit(sample_rows_in_table_info)
+#     # build the select command
+#     command = select(table).limit(sample_rows_in_table_info)
 
-    # save the columns in string format
-    columns_str = "\t".join([col.name for col in table.columns])
+#     # save the columns in string format
+#     columns_str = "\t".join([col.name for col in table.columns])
 
-    try:
-        # get the sample rows
-        with ENGINE.connect() as connection:
-            sample_rows = connection.execute(command)
-            # shorten values in the sample rows
-            sample_rows = list(map(lambda ls: [str(i)[:100] for i in ls], sample_rows))
+#     try:
+#         # get the sample rows
+#         with ENGINE.connect() as connection:
+#             sample_rows = connection.execute(command)
+#             # shorten values in the sample rows
+#             sample_rows = list(map(lambda ls: [str(i)[:100] for i in ls], sample_rows))
 
-        # save the sample rows in string format
-        sample_rows_str = "\n".join(["\t".join(row) for row in sample_rows])
+#         # save the sample rows in string format
+#         sample_rows_str = "\n".join(["\t".join(row) for row in sample_rows])
 
-    # in some dialects when there are no rows in the table a
-    # 'ProgrammingError' is returned
-    except ProgrammingError:
-        sample_rows_str = ""
+#     # in some dialects when there are no rows in the table a
+#     # 'ProgrammingError' is returned
+#     except ProgrammingError:
+#         sample_rows_str = ""
 
-    return (
-        f"{sample_rows_in_table_info} rows from {table.name} table:\n"
-        f"{columns_str}\n"
-        f"{sample_rows_str}"
-    )
+#     return (
+#         f"{sample_rows_in_table_info} rows from {table.name} table:\n"
+#         f"{columns_str}\n"
+#         f"{sample_rows_str}"
+#     )
 
 
 def get_table_info(table_names: List[str] = None) -> str:
@@ -227,7 +219,7 @@ def execute_sql(sql_query: str) -> Dict:
 def get_table_selection_prompt(
     natural_language_query: str,
 ) -> str:
-    message = f"""
+    return f"""
 You are an expert data scientist.
 Return a JSON object with relevant SQL tables for answering the following natural language query:
 ---------------
@@ -236,11 +228,7 @@ Return a JSON object with relevant SQL tables for answering the following natura
 Respond in JSON format with your answer in a field named \"tables\" which is a list of strings.
 Respond with an empty list if you cannot identify any relevant tables.
 Write your answer in markdown format.
-"""
 
-    return (
-        message
-        + f"""
 The following are the scripts that created the tables:
 ---------------------
 {get_table_info()} 
@@ -258,7 +246,6 @@ in your answer, provide the following information:
 
 Thanks!
 """
-    )
 
 
 def get_relevant_tables(natural_language_query: str) -> List[str]:
@@ -274,7 +261,7 @@ def get_relevant_tables(natural_language_query: str) -> List[str]:
     )
     messages.append({"role": "user", "content": prompt})
 
-    assistant_message = get_assistant_message(
+    assistant_message = get_open_ai_completion(
         messages=messages,
         model="gpt-3.5-turbo",
     )["message"]["content"]
@@ -323,26 +310,39 @@ Provide a properly formatted JSON object with the following information. Ensure 
 }}
 
 However, if the tables don't contain all the required data (e.g. the column isn't there or there aren't relevant enums), instead return a JSON object with just: 
+
 {{
     "Schema": "<1 to 2 sentences about the tables/columns/enums above to use>",
     "Applicability": "<1 to 2 sentences about which columns and enums are relevant, or which ones are missing>",
     "MissingData": "<1 to 2 sentences about what data is missing>"
 }}
+
 However, if a query can be close enough to the intent of the question/command, generate the SQL that gets it instead of returning MissingData.
 """
+
+
+def get_try_again_prompt_with_error(error_message: str) -> str:
+    return (
+        "Try again. "
+        f"Only respond with valid {DIALECT}. Write your answer in JSON. "
+        f"The {DIALECT} query you just generated resulted in the following error message:\n"
+        f"{error_message}"
+        "Check the table schema and ensure that the columns for the table exist and will provide the expected results."
+    )
 
 
 def text_to_sql_with_retry(
     natural_language_query: str,
     table_names: List[str],
-    k=1,
+    k=3,
 ):
     """
     Tries to take a natural language query and generate valid SQL to answer it K times
     """
-    # ask the assistant to rephrase before generating the query
+
     table_info = get_table_info(table_names)
 
+    # ask the assistant to rephrase before generating the query
     # rephrase = [{
     #     "role": "user",
     #     "content": make_rephrase_msg_with_schema_and_warnings().format(
@@ -365,12 +365,10 @@ def text_to_sql_with_retry(
     for _ in range(k):
         sql_query_data = {}
         try:
-            assistant_message = get_assistant_message(
+            assistant_message = get_open_ai_completion(
                 messages,
                 model="gpt-3.5-turbo",
-            )[
-                "message"
-            ]["content"]
+            )["message"]["content"]
 
             print(assistant_message)
 
@@ -387,7 +385,7 @@ def text_to_sql_with_retry(
             return response, sql_query
 
         except Exception as e:
-            print("failed to execute sql query", e)
+            print(f"Failed to execute sql query {sql_query} with {e}")
 
             messages.append(
                 {
@@ -398,11 +396,12 @@ def text_to_sql_with_retry(
             messages.append(
                 {
                     "role": "user",
-                    "content": MSG_WITH_ERROR_TRY_AGAIN.format(error_message=str(e)),
+                    "content": get_try_again_prompt_with_error(str(e)),
                 }
             )
 
     print(f"Could not generate {DIALECT} query after {k} tries.")
+
     return None, None
 
 
@@ -450,7 +449,6 @@ if __name__ == "__main__":
 
     tables = ["invoices", "invoice_items", "tracks", "albums"]
 
-    print(text_to_sql_with_retry(question, tables))
+    result, sql_query = text_to_sql_with_retry(question, tables)
 
-    # print(get_table_info())
     # SocketModeHandler(app, SLACK_APP_TOKEN).start()
