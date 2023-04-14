@@ -33,7 +33,7 @@ openai.api_key = OPENAI_API_KEY
 
 
 def get_assistant_message(
-    messages,
+    messages: List[Dict],
     model: str = "gpt-3.5-turbo",
     temperature: float = 0,
 ):
@@ -61,7 +61,7 @@ def format_index(index: dict) -> str:
     )
 
 
-def extract_text_from_markdown(text):
+def extract_text_from_markdown(text: str) -> str:
     matches = re.findall(r"```([\s\S]+?)```", text)
     if matches:
         return matches[0]
@@ -105,7 +105,7 @@ def get_sample_rows(engine: Engine, table: Table) -> str:
     )
 
 
-def get_table_info():
+def get_table_info() -> str:
     """
     Get table info from the database
     https://github.com/hwchase17/langchain/blob/634358db5e9d0f091c66c82b8ed1379ec6531f88/langchain/sql_database.py#L128
@@ -167,7 +167,7 @@ def get_table_selection_messages():
     return []
 
 
-def get_table_selection_message_with_descriptions():
+def get_table_selection_user_message_with_descriptions():
     message = """
         You are an expert data scientist.
         Return a JSON object with relevant SQL tables for answering the following natural language query:
@@ -202,16 +202,18 @@ def get_table_selection_message_with_descriptions():
     )
 
 
-def get_relevant_tables(natural_language_query):
+def get_relevant_tables(natural_language_query: str) -> List[str]:
     """
     Identify relevant tables for answering a natural language query via LM
     """
-    content = get_table_selection_message_with_descriptions().format(
+
+    # including system messages and few shot examples
+    messages = get_table_selection_messages().copy()
+
+    user_content = get_table_selection_user_message_with_descriptions().format(
         natural_language_query=natural_language_query,
     )
-
-    messages = get_table_selection_messages().copy()
-    messages.append({"role": "user", "content": content})
+    messages.append({"role": "user", "content": user_content})
 
     assistant_message = get_assistant_message(
         messages=messages,
@@ -220,6 +222,7 @@ def get_relevant_tables(natural_language_query):
 
     tables_json_str = extract_text_from_markdown(assistant_message)
     tables = json.loads(tables_json_str).get("tables")
+
     return tables
 
 
@@ -252,9 +255,9 @@ def handle_mentions(event, client, say):
     )
 
 
-@app.event("message")
-def handle_message_events(body, logger):
-    logger.info(body)
+# @app.event("message")
+# def handle_message_events(body, logger):
+#     logger.info(body)
 
 
 # Start your app
