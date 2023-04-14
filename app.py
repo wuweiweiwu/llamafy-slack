@@ -333,12 +333,11 @@ We already created the tables in the database with the following CREATE TABLE co
 ---------------------
 {table_info}
 ---------------------
-
+ 
 Ensure to include which table each column is from (table.column)
 Use CTE format for computing subqueries.
 
 Provide a properly formatted JSON object with the following information. Ensure to escape any special characters so it can be parsed as JSON.
-
 {{
     "Schema": "<1 to 2 sentences about the tables/columns/enums above to use>",
     "Applicability": "<1 to 2 sentences about which columns and enums are relevant, or which ones are missing>",
@@ -346,7 +345,6 @@ Provide a properly formatted JSON object with the following information. Ensure 
 }}
 
 However, if the tables don't contain all the required data (e.g. the column isn't there or there aren't relevant enums), instead return a JSON object with just: 
-
 {{
     "Schema": "<1 to 2 sentences about the tables/columns/enums above to use>",
     "Applicability": "<1 to 2 sentences about which columns and enums are relevant, or which ones are missing>",
@@ -400,6 +398,7 @@ def text_to_sql_with_retry(
 
     for _ in range(k):
         sql_query_data = {}
+
         try:
             assistant_message = get_open_ai_completion(
                 messages,
@@ -421,12 +420,10 @@ def text_to_sql_with_retry(
             return response, sql_query
 
         except Exception as e:
-            print(f"Failed to execute sql query {sql_query} with {e}")
-
             messages.append(
                 {
                     "role": "assistant",
-                    "content": assistant_message["message"]["content"],
+                    "content": assistant_message,
                 }
             )
             messages.append(
@@ -481,10 +478,13 @@ if __name__ == "__main__":
 
     question = "Who are the top 3 best selling artists?"
 
-    # tables = get_relevant_tables(question)
+    tables = get_relevant_tables(question)
+    # print(tables)
 
-    tables = ["invoices", "invoice_items", "tracks", "albums"]
+    # tables = ["invoices", "invoice_items", "tracks", "albums", "artists"]
 
     result, sql_query = text_to_sql_with_retry(question, tables)
+
+    print(result)
 
     # SocketModeHandler(app, SLACK_APP_TOKEN).start()
