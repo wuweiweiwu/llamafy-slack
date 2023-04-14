@@ -497,30 +497,35 @@ app = App(token=SLACK_BOT_TOKEN)
 @app.event("app_mention")
 def handle_mentions(event, client, say):
     thread_ts = event.get("thread_ts", None) or event["ts"]
-    prompt = re.sub("\\s<@[^, ]*|^<@[^, ]*", "", event["text"])
+    question = re.sub("\\s<@[^, ]*|^<@[^, ]*", "", event["text"])
+
+    print(question)
+
+    tables = get_relevant_tables(question)
+    result, sql_query = text_to_sql_with_retry(question, tables)
+    markdown = Tomark.table(result["results"])
+
+    # print(markdown)
 
     # say() sends a message to the channel where the event was triggered
     say(
-        # blocks=[
-        #     {
-        #         "type": "section",
-        #         "text": {"type": "mrkdwn", "text": f"Hey there <@{event['user']}>!"},
-        #         "accessory": {
-        #             "type": "button",
-        #             "text": {"type": "plain_text", "text": "Click Me"},
-        #             "action_id": "button_click",
-        #             "value": thread_ts,
-        #         },
-        #     }
-        # ],
-        text=prompt,
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": markdown,
+                },
+            }
+        ],
+        text=f"This is what I was able to find for you!",
         thread_ts=thread_ts,
     )
 
 
-# @app.event("message")
-# def handle_message_events(body, logger):
-#     logger.info(body)
+@app.event("message")
+def handle_message_events(body, logger):
+    logger.info(body)
 
 
 # Start your app
@@ -536,7 +541,10 @@ if __name__ == "__main__":
 
     result, sql_query = text_to_sql_with_retry(question, tables)
 
-    markdown = Tomark.table(result["results"])
-    print(markdown)
+    data = json.dumps(result["results"], indent=2)
+    print(data)
+
+    # markdown = Tomark.table(result["results"])
+    # print(markdown)
 
     # SocketModeHandler(app, SLACK_APP_TOKEN).start()
