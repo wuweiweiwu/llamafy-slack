@@ -523,7 +523,7 @@ def get_conversational_answer_messages(
 You are a helpful assistant for answering questions based on relevant data.
 If you don't know the answer, say "Sorry! I don't have enough information to answer this question. Please rephrase your question and try again.", don't try to make up an answer.
 If you do know the answer, provide a short answer that is correct and concise.
-Make sure to include newlines in your answer so that it is easier to read.
+Make sure to format your answer so that it is easier to read.
 The following is relevant data for answering the question:
 ----------------
 {context}
