@@ -517,8 +517,9 @@ def get_conversational_answer_messages(
             "role": "system",
             "content": f"""
 You are a helpful and empathetic assistant for answering questions.
-Include as much information that you think is relevant to answer the question.
 If you don't know the answer, say "Sorry! I don't have enough information to answer this question. Please try again.", don't try to make up an answer.
+If you do know the answer, provide a short answer that is correct and concise.
+If you do not know the unit of measurement, do not include the number in your answer.
 The following is relevant data for answering the question:
 ----------------
 {context}
@@ -587,8 +588,6 @@ def get_visualization_json_spec(data: str):
 def get_visualization_image_url(spec: Any):
     png_data = vlc.vegalite_to_png(vl_spec=spec, scale=2)
     res = upload(png_data)
-
-    print(res)
 
     return res["url"]
 
@@ -692,12 +691,12 @@ def handle_mentions(event, client, say):
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        # "text": f"_Source_: {ENGINE.url.database}\n_Tables_: {', '.join(tables)}\n_Date_: {date.today()}\n_Complexity_: {get_sql_complexity(sql_query)}/10",
-                        "text": f"_Source_: {ENGINE.url.database}\n_Tables_: {', '.join(tables)}\n_Date_: {date.today()}",
+                        "text": f"_Source_: {ENGINE.url.database}\n_Date_: {date.today()}",
                     }
                 ],
             },
         ],
+        text=answer,
         thread_ts=thread_ts,
     )
 
