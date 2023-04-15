@@ -540,22 +540,27 @@ def handle_mentions(event, client, say):
 
     tables = get_relevant_tables(question)
     result, sql_query = generate_and_execute_sql(question, tables)
-    markdown = Tomark.table(result["results"])
+    # markdown = Tomark.table(result["results"])
 
     # print(markdown)
 
+    data = json.dumps(result["results"], indent=2)
+    # print(data)
+
+    answer = get_conversational_answer(question, data)
+
     # say() sends a message to the channel where the event was triggered
     say(
-        blocks=[
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": markdown,
-                },
-            }
-        ],
-        text=f"This is what I was able to find for you!",
+        # blocks=[
+        #     {
+        #         "type": "section",
+        #         "text": {
+        #             "type": "mrkdwn",
+        #             "text": markdown,
+        #         },
+        #     }
+        # ],
+        text=answer,
         thread_ts=thread_ts,
     )
 
@@ -569,21 +574,21 @@ def handle_message_events(body, logger):
 if __name__ == "__main__":
     # print(get_table_info())
 
-    question = "Who are the top 3 best selling artists?"
+    # question = "Who are the top 3 best selling artists?"
 
-    tables = get_relevant_tables(question)
-    # print(tables)
+    # tables = get_relevant_tables(question)
+    # # print(tables)
 
-    # tables = ["invoices", "invoice_items", "tracks", "albums", "artists"]
+    # # tables = ["invoices", "invoice_items", "tracks", "albums", "artists"]
 
-    result, sql_query = generate_and_execute_sql(question, tables)
+    # result, sql_query = generate_and_execute_sql(question, tables)
 
-    data = json.dumps(result["results"], indent=2)
-    # print(data)
+    # data = json.dumps(result["results"], indent=2)
+    # # print(data)
 
-    print(get_conversational_answer(question, data))
+    # print(get_conversational_answer(question, data))
 
-    # markdown = Tomark.table(result["results"])
-    # print(markdown)
+    # # markdown = Tomark.table(result["results"])
+    # # print(markdown)
 
-    # SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    SocketModeHandler(app, SLACK_APP_TOKEN).start()
