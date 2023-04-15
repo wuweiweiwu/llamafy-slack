@@ -4,6 +4,7 @@ import time
 import json
 from typing import Dict, List, Any
 from collections import OrderedDict
+from datetime import date
 
 from sqlalchemy import (
     MetaData,
@@ -41,8 +42,7 @@ openai.api_key = OPENAI_API_KEY
 # global engine
 # needs to be dynamic in the future
 ENGINE = create_engine("sqlite:///./chinook.db")
-
-DIALECT = "sqlite"
+DIALECT = ENGINE.dialect.name
 
 
 sql_generation_few_shots = [
@@ -593,6 +593,41 @@ def get_visualization_image_url(spec: Any):
     return res["url"]
 
 
+def get_sql_complexity_messages(sql_query: str):
+    return [
+        {
+            "role": "system",
+            "content": f"""
+You are a SQL expert tasked with analyzing the complexity of a SQL query. Rate the complexity of the provided query on a scale of 1 to 10 and justify your reasoning.
+Respond in JSON format with your answer in a field named \"complexity\" which is a integer.
+in your answer, provide the following information:
+
+- <1 or 2 sentences explaining the reasoning behind the score>
+- the markdown formatted like this:
+```
+<json of the complexity>
+```
+""",
+        },
+        {
+            "role": "user",
+            "content": f"Rate the complexity of the following query on a scale of 1 to 10 and justify your reasoning.\n\n```\n{sql_query}\n```",
+        },
+    ]
+
+
+def get_sql_complexity(sql_query: str) -> int:
+    messages = get_sql_complexity_messages(sql_query)
+
+    assistant_message = get_open_ai_completion(messages)["message"]["content"]
+
+    print(assistant_message)
+
+    json_str = extract_json_str_from_markdown_code_block(assistant_message)
+
+    return json.loads(json_str)["complexity"]
+
+
 # Initializes your app with your bot token and socket mode handler
 app = App(token=SLACK_BOT_TOKEN)
 
@@ -607,21 +642,21 @@ def handle_mentions(event, client, say):
     tables = get_relevant_tables(question)
     result, sql_query = generate_and_execute_sql(question, tables)
 
-    if result["MissingData"]:
-        print(result["MissingData"])
-        say(
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "plain_text",
-                        "text": result["MissingData"],
-                    },
-                },
-            ],
-            thread_ts=thread_ts,
-        )
-        return
+    # if result["MissingData"]:
+    #     print(result["MissingData"])
+    #     say(
+    #         blocks=[
+    #             {
+    #                 "type": "section",
+    #                 "text": {
+    #                     "type": "plain_text",
+    #                     "text": result["MissingData"],
+    #                 },
+    #             },
+    #         ],
+    #         thread_ts=thread_ts,
+    #     )
+    #     return
 
     data = json.dumps(result["results"], indent=2)
 
@@ -652,6 +687,16 @@ def handle_mentions(event, client, say):
                 "image_url": url,
                 "alt_text": "visualization",
             },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        # "text": f"_Source_: {ENGINE.url.database}\n_Tables_: {', '.join(tables)}\n_Date_: {date.today()}\n_Complexity_: {get_sql_complexity(sql_query)}/10",
+                        "text": f"_Source_: {ENGINE.url.database}\n_Tables_: {', '.join(tables)}\n_Date_: {date.today()}",
+                    }
+                ],
+            },
         ],
         thread_ts=thread_ts,
     )
@@ -664,18 +709,18 @@ def handle_message_events(body, logger):
 
 # Start your app
 if __name__ == "__main__":
-    question = "Who are the top 3 best selling artists?"
+    # question = "Who are the top 3 best selling artists?"
 
-    tables = get_relevant_tables(question)
+    # tables = get_relevant_tables(question)
 
-    result, sql_query = generate_and_execute_sql(question, tables)
+    # result, sql_query = generate_and_execute_sql(question, tables)
 
-    data = json.dumps(result["results"], indent=2)
-    # data2 = json.dumps(result, indent=2)
+    # data = json.dumps(result["results"], indent=2)
+    # # data2 = json.dumps(result, indent=2)
 
-    print(data)
+    # print(data)
 
-    print(get_conversational_answer(question, data))
+    # print(get_conversational_answer(question, data))
 
     # spec = get_visualization_json_spec(data)
 
@@ -700,4 +745,4 @@ if __name__ == "__main__":
     # markdown = Tomark.table(result["results"])
     # print(markdown)
 
-    # SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    SocketModeHandler(app, SLACK_APP_TOKEN).start()
