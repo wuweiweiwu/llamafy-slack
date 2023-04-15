@@ -516,13 +516,17 @@ def get_conversational_answer_messages(
         {
             "role": "system",
             "content": f"""
-You are a helpful and empathetic assistant that is answering the following question: {natural_language_query}
-Use the following pieces of information.
+You are a helpful and empathetic assistant for answering questions.
 Include as much information that you think is relevant to answer the question.
 If you don't know the answer, say "Sorry! I don't have enough information to answer this question. Please try again.", don't try to make up an answer.
+The following is relevant data for answering the question:
 ----------------
 {context}
 """,
+        },
+        {
+            "role": "user",
+            "content": f"Provide an answer for the following question: {natural_language_query}",
         },
     ]
 
@@ -603,6 +607,22 @@ def handle_mentions(event, client, say):
     tables = get_relevant_tables(question)
     result, sql_query = generate_and_execute_sql(question, tables)
 
+    if result["MissingData"]:
+        print(result["MissingData"])
+        say(
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "plain_text",
+                        "text": result["MissingData"],
+                    },
+                },
+            ],
+            thread_ts=thread_ts,
+        )
+        return
+
     data = json.dumps(result["results"], indent=2)
 
     #     context = f"""
@@ -644,17 +664,18 @@ def handle_message_events(body, logger):
 
 # Start your app
 if __name__ == "__main__":
-    # question = "Who are the top 3 best selling artists?"
+    question = "Who are the top 3 best selling artists?"
 
-    # tables = get_relevant_tables(question)
+    tables = get_relevant_tables(question)
 
-    # result, sql_query = generate_and_execute_sql(question, tables)
+    result, sql_query = generate_and_execute_sql(question, tables)
 
-    # data = json.dumps(result["results"], indent=2)
+    data = json.dumps(result["results"], indent=2)
+    # data2 = json.dumps(result, indent=2)
 
-    # print(data)
+    print(data)
 
-    # print(get_conversational_answer(question, data))
+    print(get_conversational_answer(question, data))
 
     # spec = get_visualization_json_spec(data)
 
@@ -679,4 +700,4 @@ if __name__ == "__main__":
     # markdown = Tomark.table(result["results"])
     # print(markdown)
 
-    SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    # SocketModeHandler(app, SLACK_APP_TOKEN).start()
