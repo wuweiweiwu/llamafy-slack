@@ -23,6 +23,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
 import openai
 from tomark import Tomark
+import vl_convert as vlc
 
 # Load default environment variables (.env)
 load_dotenv()
@@ -117,11 +118,25 @@ def get_open_ai_completion(
 #     )
 
 
-def extract_text_from_markdown(text: str) -> str:
+def extract_text_from_markdown_code_block(text: str) -> str:
     matches = re.findall(r"```([\s\S]+?)```", text)
     if matches:
         return matches[0]
     return text
+
+
+def extract_json_str_from_markdown_code_block(text: str) -> str:
+    matches = re.findall(r"```([\s\S]+?)```", text)
+
+    if matches:
+        code_str = matches[0]
+        match = re.search(r"(?i)json\s+(.*)", code_str, re.DOTALL)
+        if match:
+            code_str = match.group(1)
+    else:
+        code_str = text
+
+    return code_str
 
 
 def extract_sql_query_from_message(text: str) -> Dict:
@@ -349,7 +364,7 @@ def get_relevant_tables(natural_language_query: str) -> List[str]:
 
     print(assistant_message)
 
-    tables_json_str = extract_text_from_markdown(assistant_message)
+    tables_json_str = extract_text_from_markdown_code_block(assistant_message)
     tables = json.loads(tables_json_str).get("tables")
 
     return tables
@@ -526,6 +541,48 @@ def get_conversational_answer(
     return assistant_message
 
 
+def get_visualization_messages(data: str):
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful assistant for generating syntactically correct Vega-Lite specs that are best for visualizing given data."
+                " Write responses in markdown format."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Generate a syntactically correct Vega-Lite spec to best visualize the given data."
+                "\n\n"
+                f"{data}"
+            ),
+        },
+    ]
+
+    return messages
+
+
+def get_visualization_json_spec(data: str):
+    messages = get_visualization_messages(data)
+
+    assistant_message = get_open_ai_completion(messages)["message"]["content"]
+
+    print(assistant_message)
+
+    vega_str = extract_json_str_from_markdown_code_block(assistant_message)
+
+    vega_json = json.loads(vega_str)
+
+    return vega_json
+
+
+def generate_visualization_image(spec: Any):
+    png_data = vlc.vegalite_to_png(vl_spec=spec, scale=2)
+    with open("chart.png", "wb") as f:
+        f.write(png_data)
+
+
 # Initializes your app with your bot token and socket mode handler
 app = App(token=SLACK_BOT_TOKEN)
 
@@ -551,16 +608,16 @@ def handle_mentions(event, client, say):
 
     # say() sends a message to the channel where the event was triggered
     say(
-        blocks=[
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"```sql\n{sql_query}\n```",
-                },
-            }
-        ],
-        text=f"I was able to query the following tables {', '.join(tables)} to answer your question:\n\n{answer}",
+        # blocks=[
+        #     {
+        #         "type": "section",
+        #         "text": {
+        #             "type": "mrkdwn",
+        #             "text": f"```sql\n{sql_query}\n```",
+        #         },
+        #     }
+        # ],
+        text=answer,
         thread_ts=thread_ts,
     )
 
@@ -572,23 +629,23 @@ def handle_message_events(body, logger):
 
 # Start your app
 if __name__ == "__main__":
-    # print(get_table_info())
+    question = "Who are the top 3 best selling artists?"
 
-    # question = "Who are the top 3 best selling artists?"
+    tables = get_relevant_tables(question)
 
-    # tables = get_relevant_tables(question)
-    # # print(tables)
+    result, sql_query = generate_and_execute_sql(question, tables)
 
-    # # tables = ["invoices", "invoice_items", "tracks", "albums", "artists"]
+    data = json.dumps(result["results"], indent=2)
 
-    # result, sql_query = generate_and_execute_sql(question, tables)
-
-    # data = json.dumps(result["results"], indent=2)
-    # # print(data)
+    # print(data)
 
     # print(get_conversational_answer(question, data))
 
-    # # markdown = Tomark.table(result["results"])
-    # # print(markdown)
+    spec = get_visualization_json_spec(data)
 
-    SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    generate_visualization_image(spec)
+
+    # markdown = Tomark.table(result["results"])
+    # print(markdown)
+
+    # SocketModeHandler(app, SLACK_APP_TOKEN).start()
