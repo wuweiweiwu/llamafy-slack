@@ -551,16 +551,16 @@ def handle_mentions(event, client, say):
 
     # say() sends a message to the channel where the event was triggered
     say(
-        # blocks=[
-        #     {
-        #         "type": "section",
-        #         "text": {
-        #             "type": "mrkdwn",
-        #             "text": markdown,
-        #         },
-        #     }
-        # ],
-        text=answer,
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"```sql\n{sql_query}\n```",
+                },
+            }
+        ],
+        text=f"I was able to query the following tables {', '.join(tables)} to answer your question:\n\n{answer}",
         thread_ts=thread_ts,
     )
 
