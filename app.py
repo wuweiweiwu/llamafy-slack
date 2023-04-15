@@ -702,6 +702,23 @@ def handle_mentions(event, client, say):
                     }
                 ],
             },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "Would you like an analyst to check my work?",
+                },
+                "accessory": {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Yes",
+                    },
+                    # "value": "click_me_123",
+                    # "url": "https://google.com",
+                    "action_id": "button-action",
+                },
+            },
         ],
         text=answer,
         thread_ts=thread_ts,
