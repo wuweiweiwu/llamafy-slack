@@ -606,12 +606,8 @@ def handle_mentions(event, client, say):
 
     tables = get_relevant_tables(question)
     result, sql_query = generate_and_execute_sql(question, tables)
-    # markdown = Tomark.table(result["results"])
-
-    # print(markdown)
 
     data = json.dumps(result["results"], indent=2)
-    # print(data)
 
     answer = get_conversational_answer(question, data)
 
