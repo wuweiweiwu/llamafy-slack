@@ -44,6 +44,8 @@ openai.api_key = OPENAI_API_KEY
 ENGINE = create_engine("sqlite:///./chinook.db")
 DIALECT = ENGINE.dialect.name
 
+COLORS = ["#D4AFB9", "#D1CFE2", "#9CADCE", "#7EC4CF", "#52B2CF"]
+
 
 sql_generation_few_shots = [
     {
@@ -93,7 +95,7 @@ class NotReadOnlyException(Exception):
     pass
 
 
-def get_open_ai_completion(
+def get_openai_completion(
     messages: List[Dict],
     model: str = "gpt-3.5-turbo",
     temperature: float = 0,
@@ -361,7 +363,7 @@ def get_relevant_tables(natural_language_query: str) -> List[str]:
     )
     messages.append({"role": "user", "content": prompt})
 
-    assistant_message = get_open_ai_completion(
+    assistant_message = get_openai_completion(
         messages=messages,
         model="gpt-3.5-turbo",
     )["message"]["content"]
@@ -470,10 +472,12 @@ def generate_and_execute_sql(
         sql_query_data = {}
 
         try:
-            assistant_message = get_open_ai_completion(
+            assistant_message = get_openai_completion(
                 messages,
                 model="gpt-3.5-turbo",
-            )["message"]["content"]
+            )[
+                "message"
+            ]["content"]
 
             print(assistant_message)
 
@@ -516,10 +520,10 @@ def get_conversational_answer_messages(
         {
             "role": "system",
             "content": f"""
-You are a helpful and empathetic assistant for answering questions.
-If you don't know the answer, say "Sorry! I don't have enough information to answer this question. Please try again.", don't try to make up an answer.
+You are a helpful assistant for answering questions based on relevant data.
+If you don't know the answer, say "Sorry! I don't have enough information to answer this question. Please rephrase your question and try again.", don't try to make up an answer.
 If you do know the answer, provide a short answer that is correct and concise.
-If you do not know the unit of measurement, do not include the number in your answer.
+Make sure to include newlines in your answer so that it is easier to read.
 The following is relevant data for answering the question:
 ----------------
 {context}
@@ -538,7 +542,7 @@ def get_conversational_answer(
 ) -> str:
     messages = get_conversational_answer_messages(natural_language_query, context)
 
-    assistant_message = get_open_ai_completion(
+    assistant_message = get_openai_completion(
         messages,
         model="gpt-3.5-turbo",
     )[
@@ -553,8 +557,9 @@ def get_visualization_messages(data: str):
         {
             "role": "system",
             "content": (
-                "You are a helpful assistant for generating syntactically correct Vega-Lite specs that are best for visualizing the given data."
-                " Make sure that all axis encodings are human readable and not snake case or camel case."
+                "You are a data visualization expert tasked with generating syntactically correct Vega-Lite specs that are best for visualizing the given data."
+                " Make sure that ALL axis titles are human-readable and not snake_case or camelCase."
+                f" Make sure only following colors are used: {', '.join(COLORS)}."
                 " Write responses in markdown format."
             ),
         },
@@ -574,7 +579,7 @@ def get_visualization_messages(data: str):
 def get_visualization_json_spec(data: str):
     messages = get_visualization_messages(data)
 
-    assistant_message = get_open_ai_completion(messages)["message"]["content"]
+    assistant_message = get_openai_completion(messages)["message"]["content"]
 
     print(assistant_message)
 
@@ -618,7 +623,7 @@ in your answer, provide the following information:
 def get_sql_complexity(sql_query: str) -> int:
     messages = get_sql_complexity_messages(sql_query)
 
-    assistant_message = get_open_ai_completion(messages)["message"]["content"]
+    assistant_message = get_openai_completion(messages)["message"]["content"]
 
     print(assistant_message)
 
@@ -658,6 +663,8 @@ def handle_mentions(event, client, say):
     #     return
 
     data = json.dumps(result["results"], indent=2)
+
+    print(data)
 
     #     context = f"""
     # tables queried: {tables}
