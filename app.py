@@ -516,15 +516,13 @@ def get_conversational_answer_messages(
         {
             "role": "system",
             "content": f"""
-Use the following pieces of information to answer the question at the end.
-If you don't know the answer, just say that you don't know, don't try to make up an answer.
+You are a helpful and empathetic assistant that is answering the following question: {natural_language_query}
+Use the following pieces of information.
+Include as much information that you think is relevant to answer the question.
+If you don't know the answer, say "Sorry! I don't have enough information to answer this question. Please try again.", don't try to make up an answer.
 ----------------
 {context}
 """,
-        },
-        {
-            "role": "user",
-            "content": natural_language_query,
         },
     ]
 
@@ -550,7 +548,8 @@ def get_visualization_messages(data: str):
         {
             "role": "system",
             "content": (
-                "You are a helpful assistant for generating syntactically correct Vega-Lite specs that are best for visualizing given data."
+                "You are a helpful assistant for generating syntactically correct Vega-Lite specs that are best for visualizing the given data."
+                " Make sure that all axis encodings are human readable and not snake case or camel case."
                 " Write responses in markdown format."
             ),
         },
@@ -583,8 +582,6 @@ def get_visualization_json_spec(data: str):
 
 def get_visualization_image_url(spec: Any):
     png_data = vlc.vegalite_to_png(vl_spec=spec, scale=2)
-    # with open("chart.png", "wb") as f:
-    #     f.write(png_data)
     res = upload(png_data)
 
     print(res)
@@ -596,7 +593,6 @@ def get_visualization_image_url(spec: Any):
 app = App(token=SLACK_BOT_TOKEN)
 
 
-# Listens to incoming messages that contain "hello"
 @app.event("app_mention")
 def handle_mentions(event, client, say):
     thread_ts = event.get("thread_ts", None) or event["ts"]
@@ -608,6 +604,13 @@ def handle_mentions(event, client, say):
     result, sql_query = generate_and_execute_sql(question, tables)
 
     data = json.dumps(result["results"], indent=2)
+
+    #     context = f"""
+    # tables queried: {tables}
+    # sql query: {sql_query}
+    # columns: {result["column_names"]}
+    # data: {data}
+    # """
 
     answer = get_conversational_answer(question, data)
 
@@ -641,7 +644,7 @@ def handle_message_events(body, logger):
 
 # Start your app
 if __name__ == "__main__":
-    question = "Who are the top 3 best selling artists?"
+    # question = "Who are the top 3 best selling artists?"
 
     # tables = get_relevant_tables(question)
 
