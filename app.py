@@ -24,6 +24,9 @@ from dotenv import load_dotenv
 import openai
 from tomark import Tomark
 import vl_convert as vlc
+from cloudinary.uploader import upload
+from cloudinary.utils import cloudinary_url
+import cloudinary
 
 # Load default environment variables (.env)
 load_dotenv()
@@ -31,6 +34,15 @@ load_dotenv()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
+CLOUDINARY_KEY = os.environ.get("CLOUDINARY_KEY")
+CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET")
+
+cloudinary.config(
+    cloud_name="deqqzvauj",
+    api_key=CLOUDINARY_KEY,
+    api_secret=CLOUDINARY_SECRET,
+    secure=True,
+)
 
 openai.api_key = OPENAI_API_KEY
 
@@ -577,10 +589,15 @@ def get_visualization_json_spec(data: str):
     return vega_json
 
 
-def generate_visualization_image(spec: Any):
+def get_visualization_image_url(spec: Any):
     png_data = vlc.vegalite_to_png(vl_spec=spec, scale=2)
-    with open("chart.png", "wb") as f:
-        f.write(png_data)
+    # with open("chart.png", "wb") as f:
+    #     f.write(png_data)
+    res = upload(png_data)
+
+    print(res)
+
+    return res["url"]
 
 
 # Initializes your app with your bot token and socket mode handler
@@ -606,18 +623,25 @@ def handle_mentions(event, client, say):
 
     answer = get_conversational_answer(question, data)
 
+    spec = get_visualization_json_spec(data)
+    url = get_visualization_image_url(spec)
+
     # say() sends a message to the channel where the event was triggered
     say(
-        # blocks=[
-        #     {
-        #         "type": "section",
-        #         "text": {
-        #             "type": "mrkdwn",
-        #             "text": f"```sql\n{sql_query}\n```",
-        #         },
-        #     }
-        # ],
-        text=answer,
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "plain_text",
+                    "text": answer,
+                },
+            },
+            {
+                "type": "image",
+                "image_url": url,
+                "alt_text": "visualization",
+            },
+        ],
         thread_ts=thread_ts,
     )
 
@@ -631,21 +655,37 @@ def handle_message_events(body, logger):
 if __name__ == "__main__":
     question = "Who are the top 3 best selling artists?"
 
-    tables = get_relevant_tables(question)
+    # tables = get_relevant_tables(question)
 
-    result, sql_query = generate_and_execute_sql(question, tables)
+    # result, sql_query = generate_and_execute_sql(question, tables)
 
-    data = json.dumps(result["results"], indent=2)
+    # data = json.dumps(result["results"], indent=2)
 
     # print(data)
 
     # print(get_conversational_answer(question, data))
 
-    spec = get_visualization_json_spec(data)
+    # spec = get_visualization_json_spec(data)
 
-    generate_visualization_image(spec)
+    # get_visualization_image_url(
+    #     {
+    #         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    #         "data": {
+    #             "values": [
+    #                 {"artist_name": "Iron Maiden", "total_sales": 138.5999999999998},
+    #                 {"artist_name": "U2", "total_sales": 105.92999999999982},
+    #                 {"artist_name": "Metallica", "total_sales": 90.0899999999999},
+    #             ]
+    #         },
+    #         "mark": "bar",
+    #         "encoding": {
+    #             "x": {"field": "artist_name", "type": "nominal"},
+    #             "y": {"field": "total_sales", "type": "quantitative"},
+    #         },
+    #     }
+    # )
 
     # markdown = Tomark.table(result["results"])
     # print(markdown)
 
-    # SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    SocketModeHandler(app, SLACK_APP_TOKEN).start()
