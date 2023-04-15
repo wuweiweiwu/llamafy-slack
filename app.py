@@ -2,7 +2,7 @@ import os
 import re
 import time
 import json
-from typing import Dict, List
+from typing import Dict, List, Any
 from collections import OrderedDict
 
 from sqlalchemy import (
@@ -371,7 +371,7 @@ def get_relevant_tables(natural_language_query: str) -> List[str]:
 # """
 
 
-def get_retry_prompt(natural_language_query: str, table_info: str) -> str:
+def get_sql_generation_prompt(natural_language_query: str, table_info: str) -> str:
     return f"""You are an expert and empathetic database engineer that is generating correct read-only {DIALECT} query to answer the following question/command: {natural_language_query}
 
 We already created the tables in the database with the following CREATE TABLE code:
@@ -400,7 +400,7 @@ However, if a query can be close enough to the intent of the question/command, g
 """
 
 
-def get_try_again_prompt_with_error(error_message: str) -> str:
+def get_sql_generation_try_again_prompt_with_error(error_message: str) -> str:
     return (
         "Try again. "
         f"Only respond with valid {DIALECT}. Write your answer in JSON. "
@@ -410,10 +410,10 @@ def get_try_again_prompt_with_error(error_message: str) -> str:
     )
 
 
-def text_to_sql_with_retry(
+def generate_and_execute_sql(
     natural_language_query: str,
     table_names: List[str],
-    k=3,
+    max_retries=3,
 ):
     """
     Tries to take a natural language query and generate valid SQL to answer it K times
@@ -433,7 +433,7 @@ def text_to_sql_with_retry(
     # print(f'[REPHRASED_QUERY] {rephrased_query}')
     # natural_language_query=rephrased_query
 
-    content = get_retry_prompt(natural_language_query, table_info)
+    content = get_sql_generation_prompt(natural_language_query, table_info)
 
     # messages = make_default_messages(schemas, scope)
     messages = []
@@ -447,7 +447,7 @@ def text_to_sql_with_retry(
 
     assistant_message = None
 
-    for _ in range(k):
+    for _ in range(max_retries):
         sql_query_data = {}
 
         try:
@@ -480,13 +480,50 @@ def text_to_sql_with_retry(
             messages.append(
                 {
                     "role": "user",
-                    "content": get_try_again_prompt_with_error(str(e)),
+                    "content": get_sql_generation_try_again_prompt_with_error(str(e)),
                 }
             )
 
-    print(f"Could not generate {DIALECT} query after {k} tries.")
+    print(f"Could not generate {DIALECT} query after {max_retries} tries.")
 
     return None, None
+
+
+def get_conversational_answer_messages(
+    natural_language_query: str,
+    context,
+) -> List[Any]:
+    return [
+        {
+            "role": "system",
+            "content": f"""
+Use the following pieces of information to answer the question at the end.
+If you don't know the answer, just say that you don't know, don't try to make up an answer.
+----------------
+{context}
+""",
+        },
+        {
+            "role": "user",
+            "content": natural_language_query,
+        },
+    ]
+
+
+def get_conversational_answer(
+    natural_language_query: str,
+    context: str,
+) -> str:
+    messages = get_conversational_answer_messages(natural_language_query, context)
+
+    assistant_message = get_open_ai_completion(
+        messages,
+        model="gpt-3.5-turbo",
+    )[
+        "message"
+    ]["content"]
+
+    return assistant_message
 
 
 # Initializes your app with your bot token and socket mode handler
@@ -502,7 +539,7 @@ def handle_mentions(event, client, say):
     print(question)
 
     tables = get_relevant_tables(question)
-    result, sql_query = text_to_sql_with_retry(question, tables)
+    result, sql_query = generate_and_execute_sql(question, tables)
     markdown = Tomark.table(result["results"])
 
     # print(markdown)
@@ -539,10 +576,12 @@ if __name__ == "__main__":
 
     # tables = ["invoices", "invoice_items", "tracks", "albums", "artists"]
 
-    result, sql_query = text_to_sql_with_retry(question, tables)
+    result, sql_query = generate_and_execute_sql(question, tables)
 
     data = json.dumps(result["results"], indent=2)
-    print(data)
+    # print(data)
+
+    print(get_conversational_answer(question, data))
 
     # markdown = Tomark.table(result["results"])
     # print(markdown)
