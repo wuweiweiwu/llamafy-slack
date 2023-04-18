@@ -24,9 +24,14 @@ import cloudinary
 # Load default environment variables (.env)
 load_dotenv()
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
+SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET")
+PORT = os.environ.get("PORT", 3000)
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
 CLOUDINARY_KEY = os.environ.get("CLOUDINARY_KEY")
 CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET")
 
@@ -633,7 +638,7 @@ def get_sql_complexity(sql_query: str) -> int:
 
 
 # Initializes your app with your bot token and socket mode handler
-app = App(token=SLACK_BOT_TOKEN)
+app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 
 
 @app.event("app_mention")
@@ -730,6 +735,51 @@ def handle_message_events(body, logger):
     logger.info(body)
 
 
+@app.event("app_home_opened")
+def update_home_tab(client, event, logger):
+    try:
+        # views.publish is the method that your app uses to push a view to the Home tab
+        client.views_publish(
+            # the user that opened your app's app home
+            user_id=event["user"],
+            # the view object that appears in the app home
+            view={
+                "type": "home",
+                "callback_id": "home_view",
+                # body of the view
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Welcome to your _App's Home_* :tada:",
+                        },
+                    },
+                    {"type": "divider"},
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "This button won't do much for now but you can set up a listener for it using the `actions()` method and passing its unique `action_id`. See an example in the `examples` folder within your Bolt app.",
+                        },
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "Click me!"},
+                            }
+                        ],
+                    },
+                ],
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Error publishing home tab: {e}")
+
+
 # Start your app
 if __name__ == "__main__":
     # question = "Who are the top 3 best selling artists?"
@@ -769,3 +819,4 @@ if __name__ == "__main__":
     # print(markdown)
 
     SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    # app.start(port=int(PORT))
