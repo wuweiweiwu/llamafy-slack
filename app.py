@@ -7,6 +7,7 @@ from collections import OrderedDict
 from datetime import date, datetime
 import logging
 from logging import Logger
+from bson import ObjectId
 
 from sqlalchemy import (
     MetaData,
@@ -787,21 +788,21 @@ def build_home_view(user):
                                         "type": "plain_text",
                                         "text": "Verify answer",
                                     },
-                                    "value": "verify_anwswer",
+                                    "value": str(question["_id"]),
                                 },
                                 {
                                     "text": {"type": "plain_text", "text": "View data"},
-                                    "value": "view_data",
+                                    "value": str(question["_id"]),
                                 },
                                 {
                                     "text": {
                                         "type": "plain_text",
                                         "text": "Delete question",
                                     },
-                                    "value": "delete_question",
+                                    "value": str(question["_id"]),
                                 },
                             ],
-                            "action_id": "overflow",
+                            "action_id": "question_overflow",
                         },
                     },
                     {
@@ -961,6 +962,29 @@ def open_question_modal(ack, body, client):
     )
 
 
+@app.action("question_overflow")
+def handle_question_overflow(ack, respond, logger, context, body, client):
+    user_id = body["user"]["id"]
+
+    # print(json.dumps(body, indent=2))
+
+    question_id = body["actions"][0]["selected_option"]["value"] or None
+    action = body["actions"][0]["selected_option"]["text"]["text"] or None
+
+    ack()
+
+    if action == "Delete question":
+        QUESTIONS_COLLECTION.delete_one({"_id": ObjectId(question_id)})
+
+    # update home
+    client.views_publish(
+        # the user that opened your app's app home
+        user_id=user_id,
+        # the view object that appears in the app home
+        view=build_home_view(user=user_id),
+    )
+
+
 # Handle a view_submission request
 @app.view("view_1")
 def handle_submission(ack, body, client, view, logger):
@@ -982,7 +1006,7 @@ def handle_submission(ack, body, client, view, logger):
     # msg = ""
     # try:
     # insert into mongo
-    QUESTIONS_COLLECTION.insert_one(
+    created_question = QUESTIONS_COLLECTION.insert_one(
         {
             "question": question,
             "answer": None,
@@ -1004,21 +1028,7 @@ def handle_submission(ack, body, client, view, logger):
         view=build_home_view(user=user),
     )
 
-    # need to update the home page view
-    # this only updates the modal
-    # ack(response_action="update", view=build_home_view(user))
-
-    #     # Save to DB
-    #     msg = f"Your submission of {question} was successful"
-    # except Exception as e:
-    #     # Handle error
-    #     msg = "There was an error with your submission"
-
-    # Message the user
-    # try:
-    #     client.chat_postMessage(channel=user, text=msg)
-    # except e:
-    #     logger.exception(f"Failed to post a message {e}")
+    # how do i do this async?
 
 
 @app.middleware  # or app.use(log_request)
