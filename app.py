@@ -778,7 +778,8 @@ def update_home_tab(client, event, logger):
                                     "text": "Ask a question",
                                 },
                                 "style": "primary",
-                                "value": "ask_question",
+                                # "value": "ask_question",
+                                "action_id": "open_question_modal",
                             },
                             {
                                 "type": "button",
@@ -861,6 +862,58 @@ def update_home_tab(client, event, logger):
 
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
+
+
+@app.action("open_question_modal")
+def open_question_modal(ack, body, client):
+    # Acknowledge the command request
+    ack()
+
+    # Call views_open with the built-in client
+    client.views_open(
+        # Pass a valid trigger_id within 3 seconds of receiving it
+        trigger_id=body["trigger_id"],
+        # View payload
+        view={
+            "type": "modal",
+            # View identifier
+            "callback_id": "view_1",
+            "title": {"type": "plain_text", "text": "Llamafy"},
+            "submit": {"type": "plain_text", "text": "Submit"},
+            "close": {"type": "plain_text", "text": "Cancel"},
+            "blocks": [
+                {
+                    "type": "input",
+                    "block_id": "input_c",
+                    "label": {"type": "plain_text", "text": "What is your question?"},
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "dreamy_input",
+                        "multiline": False,
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "What was retention in Q4 2021?",
+                        },
+                    },
+                },
+                {
+                    "type": "input",
+                    "optional": True,
+                    "block_id": "input_d",
+                    "label": {"type": "plain_text", "text": "Additional context:"},
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "dreamy_input",
+                        "multiline": True,
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Any additional information that you think would be helpful for answering your question.",
+                        },
+                    },
+                },
+            ],
+        },
+    )
 
 
 @app.middleware  # or app.use(log_request)
