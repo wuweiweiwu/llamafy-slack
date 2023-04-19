@@ -30,18 +30,19 @@ from slack_sdk.models.blocks import (
     ButtonElement,
 )
 from slack_sdk.models.views import View
-
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
 import openai
 import vl_convert as vlc
 from cloudinary.uploader import upload
 import cloudinary
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
 
 # Load default environment variables (.env)
 load_dotenv()
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
@@ -53,6 +54,8 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 CLOUDINARY_KEY = os.environ.get("CLOUDINARY_KEY")
 CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET")
 
+ATLAS_URI = os.environ.get("ATLAS_URI")
+
 cloudinary.config(
     cloud_name="deqqzvauj",
     api_key=CLOUDINARY_KEY,
@@ -61,6 +64,10 @@ cloudinary.config(
 )
 
 openai.api_key = OPENAI_API_KEY
+
+MONGO_CLIENT = MongoClient(ATLAS_URI, server_api=ServerApi("1"))
+LLAMAFY_DB = MONGO_CLIENT.llamafy
+QUESTIONS_COLLECTION = LLAMAFY_DB.questions
 
 # global engine
 # needs to be dynamic in the future
@@ -748,67 +755,29 @@ def handle_mentions(event, client, say):
     )
 
 
-@app.event("app_home_opened")
-def update_home_tab(client, event, logger):
-    try:
-        # views.publish is the method that your app uses to push a view to the Home tab
-        client.views_publish(
-            # the user that opened your app's app home
-            user_id=event["user"],
-            # the view object that appears in the app home
-            view={
-                "type": "home",
-                "callback_id": "home_view",
-                # body of the view
-                "blocks": [
-                    {
-                        "type": "header",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Here's what you can do with Llamafy:",
-                        },
-                    },
-                    {
-                        "type": "actions",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "text": {
-                                    "type": "plain_text",
-                                    "text": "Ask a question",
-                                },
-                                "style": "primary",
-                                # "value": "ask_question",
-                                "action_id": "open_question_modal",
-                            },
-                            {
-                                "type": "button",
-                                "text": {
-                                    "type": "plain_text",
-                                    "text": "View recent questions",
-                                },
-                                "value": "view_recent_questions",
-                            },
-                            {
-                                "type": "button",
-                                "text": {
-                                    "type": "plain_text",
-                                    "text": "Help",
-                                },
-                                "value": "help",
-                            },
-                        ],
-                    },
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": "*Your Questions*"},
-                    },
-                    {"type": "divider"},
+def build_home_view(user):
+    # get all questions
+    user_questions = QUESTIONS_COLLECTION.find({"user": user})
+
+    blocks = []
+
+    if user_questions:
+        for question in user_questions:
+            answer = ""
+            if question["status"] == "pending":
+                answer = "I am working on your question. Please check back later."
+            elif question["status"] == "completed":
+                answer = question["answer"]
+            elif question["status"] == "error":
+                answer = "I was not able to answer your question. Please try again."
+
+            blocks.extend(
+                [
                     {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": "*Who were the best performing artists in 2023?*\nThe best performing artists were Iron Maiden, U2, and Metallica",
+                            "text": f"*{question['question']}*\n_{answer}_",
                         },
                         "accessory": {
                             "type": "overflow",
@@ -857,7 +826,80 @@ def update_home_tab(client, event, logger):
                         ],
                     },
                 ],
+            )
+    else:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "plain_text",
+                    "text": "You haven't asked any questions yet!",
+                },
             },
+        )
+
+    return {
+        "type": "home",
+        "callback_id": "home_view",
+        # body of the view
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": "Here's what you can do with Llamafy:",
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Ask a question",
+                        },
+                        "style": "primary",
+                        # "value": "ask_question",
+                        "action_id": "open_question_modal",
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "View recent questions",
+                        },
+                        "value": "view_recent_questions",
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Help",
+                        },
+                        "value": "help",
+                    },
+                ],
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Your Questions*"},
+            },
+            {"type": "divider"},
+            *blocks,
+        ],
+    }
+
+
+@app.event("app_home_opened")
+def update_home_tab(client, event, logger):
+    try:
+        # views.publish is the method that your app uses to push a view to the Home tab
+        client.views_publish(
+            # the user that opened your app's app home
+            user_id=event["user"],
+            # the view object that appears in the app home
+            view=build_home_view(user=event["user"]),
         )
 
     except Exception as e:
@@ -888,7 +930,7 @@ def open_question_modal(ack, body, client):
                     "label": {"type": "plain_text", "text": "What is your question?"},
                     "element": {
                         "type": "plain_text_input",
-                        "action_id": "dreamy_input",
+                        "action_id": "question_input",
                         "multiline": False,
                         "placeholder": {
                             "type": "plain_text",
@@ -903,7 +945,7 @@ def open_question_modal(ack, body, client):
                     "label": {"type": "plain_text", "text": "Additional context:"},
                     "element": {
                         "type": "plain_text_input",
-                        "action_id": "dreamy_input",
+                        "action_id": "context_input",
                         "multiline": True,
                         "placeholder": {
                             "type": "plain_text",
@@ -914,6 +956,50 @@ def open_question_modal(ack, body, client):
             ],
         },
     )
+
+
+# Handle a view_submission request
+@app.view("view_1")
+def handle_submission(ack, body, client, view, logger):
+    question = view["state"]["values"]["input_c"]["question_input"]["value"]
+    context = view["state"]["values"]["input_d"]["context_input"]["value"] or ""
+
+    user = body["user"]["id"]
+
+    # Validate the inputs
+    errors = {}
+    if question is not None and len(question) <= 5:
+        errors["input_c"] = "The value must be longer than 5 characters"
+    if len(errors) > 0:
+        ack(response_action="errors", errors=errors)
+        return
+
+    # need to update the home page view
+    ack()
+
+    msg = ""
+    try:
+        # insert into mongo
+        QUESTIONS_COLLECTION.insert_one(
+            {
+                "question": question,
+                "context": context,
+                "user": user,
+                "status": "pending",
+            }
+        )
+
+        # Save to DB
+        msg = f"Your submission of {question} was successful"
+    except Exception as e:
+        # Handle error
+        msg = "There was an error with your submission"
+
+    # Message the user
+    try:
+        client.chat_postMessage(channel=user, text=msg)
+    except e:
+        logger.exception(f"Failed to post a message {e}")
 
 
 @app.middleware  # or app.use(log_request)
