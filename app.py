@@ -778,11 +778,14 @@ def get_sql_complexity(sql_query: str) -> int:
 
 def build_home_view(user_id):
     # get all questions
-    user_questions = questions_collection.find({"user": user_id})
+    user_questions = questions_collection.find({"user_id": user_id})
 
     blocks = []
 
-    if user_questions and user_questions.collection.count_documents({}) > 0:
+    if (
+        user_questions
+        and questions_collection.count_documents({"user_id": user_id}) > 0
+    ):
         for question in user_questions:
             answer = ""
             match question["status"]:
@@ -793,22 +796,22 @@ def build_home_view(user_id):
                 case "error":
                     answer = "I was not able to answer your question. Please try again."
 
-            verification_status = ":white_circle: Not verified."
+            verification_status = ""
             match question["verification_status"]:
-                case "not_started":
-                    verification_status = ":white_circle: Not verified."
+                case "not_verified":
+                    verification_status = ":white_circle: Not verified"
                 case "pending":
                     verification_status = (
-                        ":large_orange_circle: Verification in progress."
+                        ":large_orange_circle: Verification in progress"
                     )
                 case "verified":
-                    verification_status = ":green_circle: Verified by <TBD>."
+                    verification_status = ":green_circle: Verified by <TBD>"
                 case "rejected":
-                    verification_status = ":red_circle: Rejected by <TBD>."
+                    verification_status = ":red_circle: Rejected by <TBD>"
 
-            date_str = datetime.fromtimestamp(int(question["created_at"])).strftime(
-                "%m/%d/%Y"
-            )
+            created_at_str = datetime.fromtimestamp(
+                int(question["created_at"])
+            ).strftime("%m/%d/%Y")
 
             blocks.extend(
                 [
@@ -816,7 +819,7 @@ def build_home_view(user_id):
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"*{question['question']}*\n_{answer}_",
+                            "text": f"*{question['question']}*\n{answer}",
                         },
                         "accessory": {
                             "type": "overflow",
@@ -843,32 +846,54 @@ def build_home_view(user_id):
                             "action_id": "question_overflow",
                         },
                     },
+                ],
+            )
+
+            # only show the visualization button once its done answering the question
+            if question["status"] == "completed":
+                duration = int(question["answered_at"]) - int(question["created_at"])
+                duration_str = f"{duration % 60} seconds"
+
+                blocks.extend(
+                    [
+                        {
+                            "type": "context",
+                            "elements": [
+                                {
+                                    "type": "mrkdwn",
+                                    "text": f"*Source*: {example_db_engine.url.database}\n*Date*: {created_at_str}\n*Duration*: {duration_str}\n*Status*: {verification_status}",
+                                }
+                            ],
+                        },
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": {
+                                        "type": "plain_text",
+                                        "text": "Visualize",
+                                    },
+                                    "style": "primary",
+                                    "value": "click_me_123",
+                                    "action_id": "actionId-1",
+                                }
+                            ],
+                        },
+                    ]
+                )
+            else:
+                blocks.append(
                     {
                         "type": "context",
                         "elements": [
                             {
                                 "type": "mrkdwn",
-                                "text": f"*Source*: {example_db_engine.url.database}\n*Date*: {date_str}\n*Status*: {verification_status}",
+                                "text": f"*Source*: {example_db_engine.url.database}\n*Date*: {created_at_str}",
                             }
                         ],
-                    },
-                    {
-                        "type": "actions",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "text": {
-                                    "type": "plain_text",
-                                    "text": "Visualize",
-                                },
-                                "style": "primary",
-                                "value": "click_me_123",
-                                "action_id": "actionId-1",
-                            }
-                        ],
-                    },
-                ],
-            )
+                    }
+                )
     else:
         blocks.append(
             {
@@ -936,11 +961,8 @@ def build_home_view(user_id):
 @app.event("app_home_opened")
 def update_home_tab(client, event, logger):
     try:
-        # views.publish is the method that your app uses to push a view to the Home tab
         client.views_publish(
-            # the user that opened your app's app home
             user_id=event["user"],
-            # the view object that appears in the app home
             view=build_home_view(user_id=event["user"]),
         )
 
@@ -1004,8 +1026,6 @@ def open_question_modal(ack, body, client):
 def handle_question_overflow(ack, respond, logger, context, body, client):
     user_id = body["user"]["id"]
 
-    # print(json.dumps(body, indent=2))
-
     question_id = body["actions"][0]["selected_option"]["value"] or None
     action = body["actions"][0]["selected_option"]["text"]["text"] or None
 
@@ -1014,11 +1034,8 @@ def handle_question_overflow(ack, respond, logger, context, body, client):
     if action == "Delete question":
         questions_collection.delete_one({"_id": ObjectId(question_id)})
 
-    # update home
     client.views_publish(
-        # the user that opened your app's app home
         user_id=user_id,
-        # the view object that appears in the app home
         view=build_home_view(user_id=user_id),
     )
 
@@ -1041,9 +1058,6 @@ def handle_submission(ack, body, client, view, logger):
 
     ack()
 
-    # msg = ""
-    # try:
-    # insert into mongo
     created_question = questions_collection.insert_one(
         {
             "question": question,
@@ -1053,6 +1067,7 @@ def handle_submission(ack, body, client, view, logger):
             "status": "pending",
             "verification_status": "not_verified",
             "created_at": datetime.now().timestamp(),
+            "answered_at": None,
             "sql_query": None,
             "data": None,
             "visualization_image_url": None,
@@ -1060,15 +1075,38 @@ def handle_submission(ack, body, client, view, logger):
         }
     )
 
-    # update home
     client.views_publish(
-        # the user that opened your app's app home
         user_id=user_id,
-        # the view object that appears in the app home
         view=build_home_view(user_id=user_id),
     )
 
     # how do i do this async?
+
+    # generate answer
+    tables = get_relevant_tables(question)
+    result, sql_query = generate_and_execute_sql(question, tables)
+    data = json.dumps(result["results"], indent=2)
+    answer = get_conversational_answer(question, data)
+
+    # update in mongo
+    updated_question = questions_collection.find_one_and_update(
+        {"_id": created_question.inserted_id},
+        {
+            "$set": {
+                "answer": answer,
+                "status": "completed",
+                "sql_query": sql_query,
+                "data": result["results"],
+                "answered_at": datetime.now().timestamp(),
+            }
+        },
+        new=True,
+    )
+
+    client.views_publish(
+        user_id=user_id,
+        view=build_home_view(user_id=user_id),
+    )
 
 
 @app.middleware  # or app.use(log_request)
