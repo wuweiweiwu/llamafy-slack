@@ -2,9 +2,11 @@ import os
 import re
 import time
 import json
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Callable
 from collections import OrderedDict
 from datetime import date
+import logging
+from logging import Logger
 
 from sqlalchemy import (
     MetaData,
@@ -13,7 +15,22 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.schema import CreateTable
-from slack_bolt import App
+from slack_bolt import App, BoltResponse, Ack, Respond
+from slack_sdk import WebClient
+from slack_sdk.models.blocks import (
+    PlainTextObject,
+    InputBlock,
+    PlainTextInputElement,
+    ExternalDataSelectElement,
+    ExternalDataMultiSelectElement,
+    Option,
+    OptionGroup,
+    SectionBlock,
+    MarkdownTextObject,
+    ButtonElement,
+)
+from slack_sdk.models.views import View
+
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
 import openai
@@ -24,6 +41,7 @@ import cloudinary
 # Load default environment variables (.env)
 load_dotenv()
 
+logging.basicConfig(level=logging.DEBUG)
 
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
@@ -730,11 +748,6 @@ def handle_mentions(event, client, say):
     )
 
 
-@app.event("message")
-def handle_message_events(body, logger):
-    logger.info(body)
-
-
 @app.event("app_home_opened")
 def update_home_tab(client, event, logger):
     try:
@@ -749,18 +762,10 @@ def update_home_tab(client, event, logger):
                 # body of the view
                 "blocks": [
                     {
-                        "type": "section",
+                        "type": "header",
                         "text": {
-                            "type": "mrkdwn",
-                            "text": "*Welcome to your _App's Home_* :tada:",
-                        },
-                    },
-                    {"type": "divider"},
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "This button won't do much for now but you can set up a listener for it using the `actions()` method and passing its unique `action_id`. See an example in the `examples` folder within your Bolt app.",
+                            "type": "plain_text",
+                            "text": "Here's what you can do with Llamafy:",
                         },
                     },
                     {
@@ -768,7 +773,85 @@ def update_home_tab(client, event, logger):
                         "elements": [
                             {
                                 "type": "button",
-                                "text": {"type": "plain_text", "text": "Click me!"},
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "Ask a question",
+                                },
+                                "style": "primary",
+                                "value": "ask_question",
+                            },
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "View recent questions",
+                                },
+                                "value": "view_recent_questions",
+                            },
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "Help",
+                                },
+                                "value": "help",
+                            },
+                        ],
+                    },
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "*Your Questions*"},
+                    },
+                    {"type": "divider"},
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Who were the best performing artists in 2023?*\nThe best performing artists were Iron Maiden, U2, and Metallica",
+                        },
+                        "accessory": {
+                            "type": "overflow",
+                            "options": [
+                                {
+                                    "text": {
+                                        "type": "plain_text",
+                                        "text": "Verify answer",
+                                    },
+                                    "value": "value-0",
+                                },
+                                {
+                                    "text": {"type": "plain_text", "text": "View data"},
+                                    "value": "value-2",
+                                },
+                                {
+                                    "text": {"type": "plain_text", "text": "Delete"},
+                                    "value": "value-1",
+                                },
+                            ],
+                            "action_id": "overflow",
+                        },
+                    },
+                    {
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": "_Source_: iTunes\n_Date range_: 4/11/2023-4/11/2024\n ",
+                            }
+                        ],
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "Visualize",
+                                },
+                                "style": "primary",
+                                "value": "click_me_123",
+                                "action_id": "actionId-1",
                             }
                         ],
                     },
@@ -778,6 +861,14 @@ def update_home_tab(client, event, logger):
 
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
+
+
+@app.middleware  # or app.use(log_request)
+def log_request(
+    logger: Logger, body: dict, next: Callable[[], BoltResponse]
+) -> BoltResponse:
+    logger.debug(body)
+    return next()
 
 
 # Start your app
