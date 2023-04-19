@@ -58,6 +58,14 @@ CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET")
 
 ATLAS_URI = os.environ.get("ATLAS_URI")
 
+assert SLACK_APP_TOKEN
+assert SLACK_BOT_TOKEN
+assert SLACK_SIGNING_SECRET
+assert OPENAI_API_KEY
+assert CLOUDINARY_KEY
+assert CLOUDINARY_SECRET
+assert ATLAS_URI
+
 cloudinary.config(
     cloud_name="deqqzvauj",
     api_key=CLOUDINARY_KEY,
