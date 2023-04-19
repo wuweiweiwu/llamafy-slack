@@ -1,3 +1,5 @@
+import csv
+import decimal
 import os
 import re
 import time
@@ -278,6 +280,17 @@ def execute_sql(sql_query: str) -> Dict:
         with connection.begin():
             sql_text = text(sql_query)
             result = connection.execute(sql_text)
+
+        # # dump to csv
+        # outfile = open("mydump.csv", "w")
+        # outcsv = csv.writer(outfile)
+
+        # # dump column titles (optional)
+        # outcsv.writerow(list(result.keys()))
+        # # dump rows
+        # outcsv.writerows(result.fetchall())
+
+        # outfile.close()
 
         column_names = list(result.keys())
         rows = [list(r) for r in result.all()]
@@ -1011,12 +1024,13 @@ def handle_submission(ack, body, client, view, logger):
             "question": question,
             "answer": None,
             "context": context,
-            "user": user_id,
+            "user_id": user_id,
             "status": "pending",
             "created_at": datetime.now().timestamp(),
             "sql_query": None,
             "data": None,
-            "visualizations": None,
+            "visualization_image_url": None,
+            "visualization_json": None,
         }
     )
 
@@ -1048,9 +1062,12 @@ if __name__ == "__main__":
     # result, sql_query = generate_and_execute_sql(question, tables)
 
     # data = json.dumps(result["results"], indent=2)
-    # # data2 = json.dumps(result, indent=2)
 
     # print(data)
+
+    execute_sql(
+        "WITH track_sales AS (\n    SELECT TrackId, SUM(Quantity) AS total_sales\n    FROM invoice_items\n    GROUP BY TrackId\n)\nSELECT artists.Name AS artist_name, SUM(track_sales.total_sales) AS total_sales\nFROM artists\nJOIN albums ON artists.ArtistId = albums.ArtistId\nJOIN tracks ON albums.AlbumId = tracks.AlbumId\nJOIN track_sales ON tracks.TrackId = track_sales.TrackId\nGROUP BY artists.Name\nORDER BY total_sales DESC\nLIMIT 3;"
+    )
 
     # print(get_conversational_answer(question, data))
 
@@ -1074,8 +1091,5 @@ if __name__ == "__main__":
     #     }
     # )
 
-    # markdown = Tomark.table(result["results"])
-    # print(markdown)
-
-    SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    # SocketModeHandler(app, SLACK_APP_TOKEN).start()
     # app.start(port=int(PORT))

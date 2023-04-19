@@ -2,4 +2,5 @@
 .venv
 .vscode
 chinook.db
-.png
+*.png
+*.csv
