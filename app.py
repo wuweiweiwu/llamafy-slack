@@ -4,7 +4,7 @@ import time
 import json
 from typing import Dict, List, Any, Callable
 from collections import OrderedDict
-from datetime import date
+from datetime import date, datetime
 import logging
 from logging import Logger
 
@@ -761,7 +761,7 @@ def build_home_view(user):
 
     blocks = []
 
-    if user_questions:
+    if user_questions and user_questions.collection.count_documents({}) > 0:
         for question in user_questions:
             answer = ""
             if question["status"] == "pending":
@@ -787,15 +787,18 @@ def build_home_view(user):
                                         "type": "plain_text",
                                         "text": "Verify answer",
                                     },
-                                    "value": "value-0",
+                                    "value": "verify_anwswer",
                                 },
                                 {
                                     "text": {"type": "plain_text", "text": "View data"},
-                                    "value": "value-2",
+                                    "value": "view_data",
                                 },
                                 {
-                                    "text": {"type": "plain_text", "text": "Delete"},
-                                    "value": "value-1",
+                                    "text": {
+                                        "type": "plain_text",
+                                        "text": "Delete question",
+                                    },
+                                    "value": "delete_question",
                                 },
                             ],
                             "action_id": "overflow",
@@ -974,32 +977,48 @@ def handle_submission(ack, body, client, view, logger):
         ack(response_action="errors", errors=errors)
         return
 
-    # need to update the home page view
     ack()
 
-    msg = ""
-    try:
-        # insert into mongo
-        QUESTIONS_COLLECTION.insert_one(
-            {
-                "question": question,
-                "context": context,
-                "user": user,
-                "status": "pending",
-            }
-        )
+    # msg = ""
+    # try:
+    # insert into mongo
+    QUESTIONS_COLLECTION.insert_one(
+        {
+            "question": question,
+            "answer": None,
+            "context": context,
+            "user": user,
+            "status": "pending",
+            "created_at": datetime.now().timestamp(),
+            "sql_query": None,
+            "data": None,
+            "visualizations": None,
+        }
+    )
 
-        # Save to DB
-        msg = f"Your submission of {question} was successful"
-    except Exception as e:
-        # Handle error
-        msg = "There was an error with your submission"
+    # update home
+    client.views_publish(
+        # the user that opened your app's app home
+        user_id=user,
+        # the view object that appears in the app home
+        view=build_home_view(user=user),
+    )
+
+    # need to update the home page view
+    # this only updates the modal
+    # ack(response_action="update", view=build_home_view(user))
+
+    #     # Save to DB
+    #     msg = f"Your submission of {question} was successful"
+    # except Exception as e:
+    #     # Handle error
+    #     msg = "There was an error with your submission"
 
     # Message the user
-    try:
-        client.chat_postMessage(channel=user, text=msg)
-    except e:
-        logger.exception(f"Failed to post a message {e}")
+    # try:
+    #     client.chat_postMessage(channel=user, text=msg)
+    # except e:
+    #     logger.exception(f"Failed to post a message {e}")
 
 
 @app.middleware  # or app.use(log_request)
