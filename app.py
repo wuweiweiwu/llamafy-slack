@@ -756,9 +756,9 @@ def handle_mentions(event, client, say):
     )
 
 
-def build_home_view(user):
+def build_home_view(user_id):
     # get all questions
-    user_questions = QUESTIONS_COLLECTION.find({"user": user})
+    user_questions = QUESTIONS_COLLECTION.find({"user": user_id})
 
     blocks = []
 
@@ -903,7 +903,7 @@ def update_home_tab(client, event, logger):
             # the user that opened your app's app home
             user_id=event["user"],
             # the view object that appears in the app home
-            view=build_home_view(user=event["user"]),
+            view=build_home_view(user_id=event["user"]),
         )
 
     except Exception as e:
@@ -981,7 +981,7 @@ def handle_question_overflow(ack, respond, logger, context, body, client):
         # the user that opened your app's app home
         user_id=user_id,
         # the view object that appears in the app home
-        view=build_home_view(user=user_id),
+        view=build_home_view(user_id=user_id),
     )
 
 
@@ -991,7 +991,7 @@ def handle_submission(ack, body, client, view, logger):
     question = view["state"]["values"]["input_c"]["question_input"]["value"]
     context = view["state"]["values"]["input_d"]["context_input"]["value"] or ""
 
-    user = body["user"]["id"]
+    user_id = body["user"]["id"]
 
     # Validate the inputs
     errors = {}
@@ -1011,7 +1011,7 @@ def handle_submission(ack, body, client, view, logger):
             "question": question,
             "answer": None,
             "context": context,
-            "user": user,
+            "user": user_id,
             "status": "pending",
             "created_at": datetime.now().timestamp(),
             "sql_query": None,
@@ -1023,9 +1023,9 @@ def handle_submission(ack, body, client, view, logger):
     # update home
     client.views_publish(
         # the user that opened your app's app home
-        user_id=user,
+        user_id=user_id,
         # the view object that appears in the app home
-        view=build_home_view(user=user),
+        view=build_home_view(user_id=user_id),
     )
 
     # how do i do this async?
