@@ -813,6 +813,8 @@ def build_home_view(user_id):
                 int(question["created_at"])
             ).strftime("%m/%d/%Y")
 
+            # TODO: should only show the overflow menu if the question is completed
+            # when its pending we should show a cancel button
             blocks.extend(
                 [
                     {
@@ -882,18 +884,7 @@ def build_home_view(user_id):
                         },
                     ]
                 )
-            else:
-                blocks.append(
-                    {
-                        "type": "context",
-                        "elements": [
-                            {
-                                "type": "mrkdwn",
-                                "text": f"*Source*: {example_db_engine.url.database}\n*Date*: {created_at_str}",
-                            }
-                        ],
-                    }
-                )
+
     else:
         blocks.append(
             {
