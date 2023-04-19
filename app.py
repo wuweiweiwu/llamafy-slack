@@ -50,7 +50,6 @@ load_dotenv()
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET")
-PORT = os.environ.get("PORT", 3000)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
@@ -68,16 +67,20 @@ cloudinary.config(
 
 openai.api_key = OPENAI_API_KEY
 
-MONGO_CLIENT = MongoClient(ATLAS_URI, server_api=ServerApi("1"))
-LLAMAFY_DB = MONGO_CLIENT.llamafy
-QUESTIONS_COLLECTION = LLAMAFY_DB.questions
+
+# Initializes your app with your bot token and socket mode handler
+app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
+
+mongo_client = MongoClient(ATLAS_URI, server_api=ServerApi("1"))
+llamafy_db = mongo_client.llamafy
+questions_collection = llamafy_db.questions
 
 # global engine
 # needs to be dynamic in the future
-ENGINE = create_engine("sqlite:///./chinook.db")
-DIALECT = ENGINE.dialect.name
+example_db_engine = create_engine("sqlite:///./chinook.db")
+example_db_dialect = example_db_engine.dialect.name
 
-COLORS = ["#D4AFB9", "#D1CFE2", "#9CADCE", "#7EC4CF", "#52B2CF"]
+example_color_palette = ["#D4AFB9", "#D1CFE2", "#9CADCE", "#7EC4CF", "#52B2CF"]
 
 
 sql_generation_few_shots = [
@@ -237,9 +240,9 @@ def get_table_info(table_names: List[str] = None) -> str:
     CREATE statements
     https://github.com/hwchase17/langchain/blob/634358db5e9d0f091c66c82b8ed1379ec6531f88/langchain/sql_database.py#L128
     """
-    inspector = inspect(ENGINE)
+    inspector = inspect(example_db_engine)
     metadata = MetaData()
-    metadata.reflect(bind=ENGINE)
+    metadata.reflect(bind=example_db_engine)
 
     if not table_names:
         table_names = inspector.get_table_names()
@@ -248,13 +251,13 @@ def get_table_info(table_names: List[str] = None) -> str:
         tbl
         for tbl in metadata.sorted_tables
         if tbl.name in set(table_names)
-        and not (DIALECT == "sqlite" and tbl.name.startswith("sqlite_"))
+        and not (example_db_dialect == "sqlite" and tbl.name.startswith("sqlite_"))
     ]
 
     tables = []
     for table in meta_tables:
         # add create table command
-        create_table = str(CreateTable(table).compile(ENGINE))
+        create_table = str(CreateTable(table).compile(example_db_engine))
         table_info = f"{create_table.rstrip()}"
 
         # extra info
@@ -275,7 +278,7 @@ def execute_sql(sql_query: str) -> Dict:
     if not is_read_only_query(sql_query):
         raise NotReadOnlyException("Only read-only queries are allowed.")
 
-    with ENGINE.connect() as connection:
+    with example_db_engine.connect() as connection:
         connection = connection.execution_options(postgresql_readonly=True)
         with connection.begin():
             sql_text = text(sql_query)
@@ -437,7 +440,7 @@ def get_relevant_tables(natural_language_query: str) -> List[str]:
 
 
 def get_sql_generation_prompt(natural_language_query: str, table_info: str) -> str:
-    return f"""You are an expert and empathetic database engineer that is generating correct read-only {DIALECT} query to answer the following question/command: {natural_language_query}
+    return f"""You are an expert and empathetic database engineer that is generating correct read-only {example_db_dialect} query to answer the following question/command: {natural_language_query}
 
 We already created the tables in the database with the following CREATE TABLE code:
 --------------------- 
@@ -468,8 +471,8 @@ However, if a query can be close enough to the intent of the question/command, g
 def get_sql_generation_try_again_prompt_with_error(error_message: str) -> str:
     return (
         "Try again. "
-        f"Only respond with valid {DIALECT}. Write your answer in JSON. "
-        f"The {DIALECT} query you just generated resulted in the following error message:\n"
+        f"Only respond with valid {example_db_dialect}. Write your answer in JSON. "
+        f"The {example_db_dialect} query you just generated resulted in the following error message:\n"
         f"{error_message}"
         "Check the table schema and ensure that the columns for the table exist and will provide the expected results."
     )
@@ -551,7 +554,7 @@ def generate_and_execute_sql(
                 }
             )
 
-    print(f"Could not generate {DIALECT} query after {max_retries} tries.")
+    print(f"Could not generate {example_db_dialect} query after {max_retries} tries.")
 
     return None, None
 
@@ -603,7 +606,7 @@ def get_visualization_messages(data: str):
             "content": (
                 "You are a data visualization expert tasked with generating syntactically correct Vega-Lite specs that are best for visualizing the given data."
                 " Make sure that ALL axis titles are human-readable and not snake_case or camelCase."
-                f" Make sure only following colors are used: {', '.join(COLORS)}."
+                f" Make sure only following colors are used: {', '.join(example_color_palette)}."
                 " Write responses in markdown format."
             ),
         },
@@ -676,114 +679,128 @@ def get_sql_complexity(sql_query: str) -> int:
     return json.loads(json_str)["complexity"]
 
 
-# Initializes your app with your bot token and socket mode handler
-app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
+# @app.event("app_mention")
+# def handle_mentions(event, client, say):
+#     thread_ts = event.get("thread_ts", None) or event["ts"]
+#     question = re.sub("\\s<@[^, ]*|^<@[^, ]*", "", event["text"])
 
+#     print(question)
 
-@app.event("app_mention")
-def handle_mentions(event, client, say):
-    thread_ts = event.get("thread_ts", None) or event["ts"]
-    question = re.sub("\\s<@[^, ]*|^<@[^, ]*", "", event["text"])
+#     tables = get_relevant_tables(question)
+#     result, sql_query = generate_and_execute_sql(question, tables)
 
-    print(question)
+#     # if result["MissingData"]:
+#     #     print(result["MissingData"])
+#     #     say(
+#     #         blocks=[
+#     #             {
+#     #                 "type": "section",
+#     #                 "text": {
+#     #                     "type": "plain_text",
+#     #                     "text": result["MissingData"],
+#     #                 },
+#     #             },
+#     #         ],
+#     #         thread_ts=thread_ts,
+#     #     )
+#     #     return
 
-    tables = get_relevant_tables(question)
-    result, sql_query = generate_and_execute_sql(question, tables)
+#     data = json.dumps(result["results"], indent=2)
 
-    # if result["MissingData"]:
-    #     print(result["MissingData"])
-    #     say(
-    #         blocks=[
-    #             {
-    #                 "type": "section",
-    #                 "text": {
-    #                     "type": "plain_text",
-    #                     "text": result["MissingData"],
-    #                 },
-    #             },
-    #         ],
-    #         thread_ts=thread_ts,
-    #     )
-    #     return
+#     print(data)
 
-    data = json.dumps(result["results"], indent=2)
+#     #     context = f"""
+#     # tables queried: {tables}
+#     # sql query: {sql_query}
+#     # columns: {result["column_names"]}
+#     # data: {data}
+#     # """
 
-    print(data)
+#     answer = get_conversational_answer(question, data)
 
-    #     context = f"""
-    # tables queried: {tables}
-    # sql query: {sql_query}
-    # columns: {result["column_names"]}
-    # data: {data}
-    # """
+#     spec = get_visualization_json_spec(data)
+#     url = get_visualization_image_url(spec)
 
-    answer = get_conversational_answer(question, data)
-
-    spec = get_visualization_json_spec(data)
-    url = get_visualization_image_url(spec)
-
-    # say() sends a message to the channel where the event was triggered
-    say(
-        blocks=[
-            {
-                "type": "section",
-                "text": {
-                    "type": "plain_text",
-                    "text": answer,
-                },
-            },
-            {
-                "type": "image",
-                "image_url": url,
-                "alt_text": "visualization",
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"_Source_: {ENGINE.url.database}\n_Date_: {date.today()}",
-                    }
-                ],
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "Would you like an analyst to check my work?",
-                },
-                "accessory": {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Yes",
-                    },
-                    # "value": "click_me_123",
-                    # "url": "https://google.com",
-                    "action_id": "button-action",
-                },
-            },
-        ],
-        text=answer,
-        thread_ts=thread_ts,
-    )
+#     # say() sends a message to the channel where the event was triggered
+#     say(
+#         blocks=[
+#             {
+#                 "type": "section",
+#                 "text": {
+#                     "type": "plain_text",
+#                     "text": answer,
+#                 },
+#             },
+#             {
+#                 "type": "image",
+#                 "image_url": url,
+#                 "alt_text": "visualization",
+#             },
+#             {
+#                 "type": "context",
+#                 "elements": [
+#                     {
+#                         "type": "mrkdwn",
+#                         "text": f"_Source_: {ENGINE.url.database}\n_Date_: {date.today()}",
+#                     }
+#                 ],
+#             },
+#             {
+#                 "type": "section",
+#                 "text": {
+#                     "type": "mrkdwn",
+#                     "text": "Would you like an analyst to check my work?",
+#                 },
+#                 "accessory": {
+#                     "type": "button",
+#                     "text": {
+#                         "type": "plain_text",
+#                         "text": "Yes",
+#                     },
+#                     # "value": "click_me_123",
+#                     # "url": "https://google.com",
+#                     "action_id": "button-action",
+#                 },
+#             },
+#         ],
+#         text=answer,
+#         thread_ts=thread_ts,
+#     )
 
 
 def build_home_view(user_id):
     # get all questions
-    user_questions = QUESTIONS_COLLECTION.find({"user": user_id})
+    user_questions = questions_collection.find({"user": user_id})
 
     blocks = []
 
     if user_questions and user_questions.collection.count_documents({}) > 0:
         for question in user_questions:
             answer = ""
-            if question["status"] == "pending":
-                answer = "I am working on your question. Please check back later."
-            elif question["status"] == "completed":
-                answer = question["answer"]
-            elif question["status"] == "error":
-                answer = "I was not able to answer your question. Please try again."
+            match question["status"]:
+                case "pending":
+                    answer = "I am working on your question. Please check back later."
+                case "completed":
+                    answer = question["answer"]
+                case "error":
+                    answer = "I was not able to answer your question. Please try again."
+
+            verification_status = ":white_circle: Not verified."
+            match question["verification_status"]:
+                case "not_started":
+                    verification_status = ":white_circle: Not verified."
+                case "pending":
+                    verification_status = (
+                        ":large_orange_circle: Verification in progress."
+                    )
+                case "verified":
+                    verification_status = ":green_circle: Verified by <TBD>."
+                case "rejected":
+                    verification_status = ":red_circle: Rejected by <TBD>."
+
+            date_str = datetime.fromtimestamp(int(question["created_at"])).strftime(
+                "%m/%d/%Y"
+            )
 
             blocks.extend(
                 [
@@ -823,7 +840,7 @@ def build_home_view(user_id):
                         "elements": [
                             {
                                 "type": "mrkdwn",
-                                "text": "_Source_: iTunes\n_Date range_: 4/11/2023-4/11/2024\n ",
+                                "text": f"*Source*: {example_db_engine.url.database}\n*Date*: {date_str}\n*Status*: {verification_status}",
                             }
                         ],
                     },
@@ -987,7 +1004,7 @@ def handle_question_overflow(ack, respond, logger, context, body, client):
     ack()
 
     if action == "Delete question":
-        QUESTIONS_COLLECTION.delete_one({"_id": ObjectId(question_id)})
+        questions_collection.delete_one({"_id": ObjectId(question_id)})
 
     # update home
     client.views_publish(
@@ -1019,13 +1036,14 @@ def handle_submission(ack, body, client, view, logger):
     # msg = ""
     # try:
     # insert into mongo
-    created_question = QUESTIONS_COLLECTION.insert_one(
+    created_question = questions_collection.insert_one(
         {
             "question": question,
             "answer": None,
             "context": context,
             "user_id": user_id,
             "status": "pending",
+            "verification_status": "not_verified",
             "created_at": datetime.now().timestamp(),
             "sql_query": None,
             "data": None,
@@ -1092,4 +1110,3 @@ if __name__ == "__main__":
     # )
 
     SocketModeHandler(app, SLACK_APP_TOKEN).start()
-    # app.start(port=int(PORT))
