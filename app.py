@@ -1065,9 +1065,9 @@ if __name__ == "__main__":
 
     # print(data)
 
-    execute_sql(
-        "WITH track_sales AS (\n    SELECT TrackId, SUM(Quantity) AS total_sales\n    FROM invoice_items\n    GROUP BY TrackId\n)\nSELECT artists.Name AS artist_name, SUM(track_sales.total_sales) AS total_sales\nFROM artists\nJOIN albums ON artists.ArtistId = albums.ArtistId\nJOIN tracks ON albums.AlbumId = tracks.AlbumId\nJOIN track_sales ON tracks.TrackId = track_sales.TrackId\nGROUP BY artists.Name\nORDER BY total_sales DESC\nLIMIT 3;"
-    )
+    # execute_sql(
+    #     "WITH track_sales AS (\n    SELECT TrackId, SUM(Quantity) AS total_sales\n    FROM invoice_items\n    GROUP BY TrackId\n)\nSELECT artists.Name AS artist_name, SUM(track_sales.total_sales) AS total_sales\nFROM artists\nJOIN albums ON artists.ArtistId = albums.ArtistId\nJOIN tracks ON albums.AlbumId = tracks.AlbumId\nJOIN track_sales ON tracks.TrackId = track_sales.TrackId\nGROUP BY artists.Name\nORDER BY total_sales DESC\nLIMIT 3;"
+    # )
 
     # print(get_conversational_answer(question, data))
 
@@ -1091,5 +1091,5 @@ if __name__ == "__main__":
     #     }
     # )
 
-    # SocketModeHandler(app, SLACK_APP_TOKEN).start()
+    SocketModeHandler(app, SLACK_APP_TOKEN).start()
     # app.start(port=int(PORT))
