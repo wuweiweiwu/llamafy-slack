@@ -562,7 +562,8 @@ def generate_and_execute_sql(
                 }
             )
 
-    print(f"Could not generate {example_db_dialect} query after {max_retries} tries.")
+    print(
+        f"Could not generate {example_db_dialect} query after {max_retries} tries.")
 
     return None, None
 
@@ -595,7 +596,8 @@ def get_conversational_answer(
     natural_language_query: str,
     context: str,
 ) -> str:
-    messages = get_conversational_answer_messages(natural_language_query, context)
+    messages = get_conversational_answer_messages(
+        natural_language_query, context)
 
     assistant_message = get_openai_completion(
         messages,
@@ -853,7 +855,8 @@ def build_home_view(user_id):
 
             # only show the visualization button once its done answering the question
             if question["status"] == "completed":
-                duration = int(question["answered_at"]) - int(question["created_at"])
+                duration = int(question["answered_at"]) - \
+                    int(question["created_at"])
                 duration_str = f"{duration % 60} seconds"
 
                 blocks.extend(
@@ -921,22 +924,22 @@ def build_home_view(user_id):
                         # "value": "ask_question",
                         "action_id": "open_question_modal",
                     },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "View recent questions",
-                        },
-                        "value": "view_recent_questions",
-                    },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Help",
-                        },
-                        "value": "help",
-                    },
+                    # {
+                    #     "type": "button",
+                    #     "text": {
+                    #         "type": "plain_text",
+                    #         "text": "View recent questions",
+                    #     },
+                    #     "value": "view_recent_questions",
+                    # },
+                    # {
+                    #     "type": "button",
+                    #     "text": {
+                    #         "type": "plain_text",
+                    #         "text": "Help",
+                    #     },
+                    #     "value": "help",
+                    # },
                 ],
             },
             {
