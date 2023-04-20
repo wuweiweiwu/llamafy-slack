@@ -1,8 +1,8 @@
 env:
-	source .venv/bin/activate
+	. .venv/bin/activate
 
 install:
-    pip install -r requirements.txt
+	pip install -r requirements.txt
 
 dump:
 	pip freeze > requirements.txt
