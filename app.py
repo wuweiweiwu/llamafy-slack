@@ -781,19 +781,6 @@ def build_home_view(user_id):
                 case "error":
                     answer = "I was not able to answer your question. Please try again."
 
-            verification_status = ""
-            match question["verification_status"]:
-                case "not_verified":
-                    verification_status = ":white_circle: Not verified"
-                case "pending":
-                    verification_status = (
-                        ":large_orange_circle: Verification in progress"
-                    )
-                case "verified":
-                    verification_status = ":green_circle: Verified by <TBD>"
-                case "rejected":
-                    verification_status = ":red_circle: Rejected by <TBD>"
-
             created_at_str = datetime.fromtimestamp(
                 int(question["created_at"])
             ).strftime("%m/%d/%Y")
@@ -812,20 +799,13 @@ def build_home_view(user_id):
                             "type": "overflow",
                             "options": [
                                 {
-                                    "text": {
-                                        "type": "plain_text",
-                                        "text": "Verify answer",
-                                    },
-                                    "value": str(question["_id"]),
-                                },
-                                {
                                     "text": {"type": "plain_text", "text": "View data"},
                                     "value": str(question["_id"]),
                                 },
                                 {
                                     "text": {
                                         "type": "plain_text",
-                                        "text": "Delete question",
+                                        "text": "Delete",
                                     },
                                     "value": str(question["_id"]),
                                 },
@@ -836,11 +816,23 @@ def build_home_view(user_id):
                 ],
             )
 
-            # only show the visualization button once its done answering the question
             if question["status"] == "completed":
-                duration = int(question["answered_at"]) - \
-                    int(question["created_at"])
-                duration_str = f"{duration % 60} seconds"
+                # duration = int(question["answered_at"]) - \
+                #     int(question["created_at"])
+                # duration_str = f"{duration % 60} seconds"
+
+                verification_status = ""
+                match question["verification_status"]:
+                    case "not_verified":
+                        verification_status = "*:white_circle: Not verified*"
+                    case "pending":
+                        verification_status = (
+                            "*:large_orange_circle: Pending verification by <@U053A2RUYQ5>*"
+                        )
+                    case "verified":
+                        verification_status = "*:green_circle: Verified by <@U053A2RUYQ5>*"
+                    case "rejected":
+                        verification_status = "*:red_circle: Rejected by <@U053A2RUYQ5>*"
 
                 blocks.extend(
                     [
@@ -849,7 +841,48 @@ def build_home_view(user_id):
                             "elements": [
                                 {
                                     "type": "mrkdwn",
-                                    "text": f"*Source*: {example_db_engine.url.database}\n*Date*: {created_at_str}\n*Duration*: {duration_str}\n*Status*: {verification_status}",
+                                    "text": f"*Date*: {created_at_str}\n*Source*: {example_db_engine.url.database}",
+                                }
+                            ],
+                        },
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": verification_status
+                            }
+                        },
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": {
+                                        "type": "plain_text",
+                                        "text": "Verify",
+                                    },
+                                    "style": "primary",
+                                },
+                                {
+                                    "type": "button",
+                                    "text": {
+                                        "type": "plain_text",
+                                        "text": "Visualize",
+                                    },
+                                }
+                            ],
+                        },
+                    ]
+                )
+            else:
+                blocks.extend(
+                    [
+                        {
+                            "type": "context",
+                            "elements": [
+                                {
+                                    "type": "mrkdwn",
+                                    "text": f"*Date*: {created_at_str}",
                                 }
                             ],
                         },
@@ -860,12 +893,10 @@ def build_home_view(user_id):
                                     "type": "button",
                                     "text": {
                                         "type": "plain_text",
-                                        "text": "Visualize",
+                                        "text": "Cancel",
                                     },
-                                    "style": "primary",
-                                    "value": "click_me_123",
-                                    "action_id": "actionId-1",
-                                }
+                                    "style": "danger",
+                                },
                             ],
                         },
                     ]
@@ -907,22 +938,22 @@ def build_home_view(user_id):
                         # "value": "ask_question",
                         "action_id": "open_question_modal",
                     },
-                    # {
-                    #     "type": "button",
-                    #     "text": {
-                    #         "type": "plain_text",
-                    #         "text": "View recent questions",
-                    #     },
-                    #     "value": "view_recent_questions",
-                    # },
-                    # {
-                    #     "type": "button",
-                    #     "text": {
-                    #         "type": "plain_text",
-                    #         "text": "Help",
-                    #     },
-                    #     "value": "help",
-                    # },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "View recent questions",
+                        },
+                        # "value": "view_recent_questions",
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Settings",
+                        },
+                        # "value": "help",
+                    },
                 ],
             },
             {
@@ -1008,7 +1039,7 @@ def handle_question_overflow(ack, respond, logger, context, body, client):
 
     ack()
 
-    if action == "Delete question":
+    if action == "Delete":
         questions_collection.delete_one({"_id": ObjectId(question_id)})
 
     client.views_publish(
