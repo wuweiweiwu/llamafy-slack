@@ -4,7 +4,7 @@ import time
 import json
 from typing import Dict, List, Any, Callable
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, date
 from logging import Logger
 from bson import ObjectId
 
@@ -672,93 +672,93 @@ def get_sql_complexity(sql_query: str) -> int:
     return json.loads(json_str)["complexity"]
 
 
-# @app.event("app_mention")
-# def handle_mentions(event, client, say):
-#     thread_ts = event.get("thread_ts", None) or event["ts"]
-#     question = re.sub("\\s<@[^, ]*|^<@[^, ]*", "", event["text"])
+@app.event("app_mention")
+def handle_mentions(event, client, say):
+    thread_ts = event.get("thread_ts", None) or event["ts"]
+    question = re.sub("\\s<@[^, ]*|^<@[^, ]*", "", event["text"])
 
-#     print(question)
+    # print(question)
 
-#     tables = get_relevant_tables(question)
-#     result, sql_query = generate_and_execute_sql(question, tables)
+    tables = get_relevant_tables(question)
+    result, sql_query = generate_and_execute_sql(question, tables)
 
-#     # if result["MissingData"]:
-#     #     print(result["MissingData"])
-#     #     say(
-#     #         blocks=[
-#     #             {
-#     #                 "type": "section",
-#     #                 "text": {
-#     #                     "type": "plain_text",
-#     #                     "text": result["MissingData"],
-#     #                 },
-#     #             },
-#     #         ],
-#     #         thread_ts=thread_ts,
-#     #     )
-#     #     return
+    # if result["MissingData"]:
+    #     print(result["MissingData"])
+    #     say(
+    #         blocks=[
+    #             {
+    #                 "type": "section",
+    #                 "text": {
+    #                     "type": "plain_text",
+    #                     "text": result["MissingData"],
+    #                 },
+    #             },
+    #         ],
+    #         thread_ts=thread_ts,
+    #     )
+    #     return
 
-#     data = json.dumps(result["results"], indent=2)
+    data = json.dumps(result["results"], indent=2)
 
-#     print(data)
+    # print(data)
 
-#     #     context = f"""
-#     # tables queried: {tables}
-#     # sql query: {sql_query}
-#     # columns: {result["column_names"]}
-#     # data: {data}
-#     # """
+    #     context = f"""
+    # tables queried: {tables}
+    # sql query: {sql_query}
+    # columns: {result["column_names"]}
+    # data: {data}
+    # """
 
-#     answer = get_conversational_answer(question, data)
+    answer = get_conversational_answer(question, data)
 
-#     spec = get_visualization_json_spec(data)
-#     url = get_visualization_image_url(spec)
+    spec = get_visualization_json_spec(data)
+    url = get_visualization_image_url(spec)
 
-#     # say() sends a message to the channel where the event was triggered
-#     say(
-#         blocks=[
-#             {
-#                 "type": "section",
-#                 "text": {
-#                     "type": "plain_text",
-#                     "text": answer,
-#                 },
-#             },
-#             {
-#                 "type": "image",
-#                 "image_url": url,
-#                 "alt_text": "visualization",
-#             },
-#             {
-#                 "type": "context",
-#                 "elements": [
-#                     {
-#                         "type": "mrkdwn",
-#                         "text": f"_Source_: {ENGINE.url.database}\n_Date_: {date.today()}",
-#                     }
-#                 ],
-#             },
-#             {
-#                 "type": "section",
-#                 "text": {
-#                     "type": "mrkdwn",
-#                     "text": "Would you like an analyst to check my work?",
-#                 },
-#                 "accessory": {
-#                     "type": "button",
-#                     "text": {
-#                         "type": "plain_text",
-#                         "text": "Yes",
-#                     },
-#                     # "value": "click_me_123",
-#                     # "url": "https://google.com",
-#                     "action_id": "button-action",
-#                 },
-#             },
-#         ],
-#         text=answer,
-#         thread_ts=thread_ts,
-#     )
+    # say() sends a message to the channel where the event was triggered
+    say(
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "plain_text",
+                    "text": answer,
+                },
+            },
+            {
+                "type": "image",
+                "image_url": url,
+                "alt_text": "visualization",
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"_Source_: {example_db_engine.url.database}\n_Date_: {date.today()}",
+                    }
+                ],
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "Would you like an analyst to check my work?",
+                },
+                "accessory": {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Yes",
+                    },
+                    # "value": "click_me_123",
+                    # "url": "https://google.com",
+                    "action_id": "button-action",
+                },
+            },
+        ],
+        text=answer,
+        thread_ts=thread_ts,
+    )
 
 
 def build_home_view(user_id):
@@ -1144,6 +1144,8 @@ if __name__ == "__main__":
     # print(get_conversational_answer(question, data))
 
     # spec = get_visualization_json_spec(data)
+
+    # print(get_visualization_image_url(spec))
 
     # get_visualization_image_url(
     #     {
